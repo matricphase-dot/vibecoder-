@@ -1,0 +1,4 @@
+**/node_modules/
+workspace/
+backend/running-jobs.json
+.env

@@ -1,0 +1,116 @@
+[
+  {
+    "jobId": "job-1766817671546",
+    "pid": 14964,
+    "port": 5246,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766817671546",
+    "previewUrl": "http://127.0.0.1:5246/",
+    "createdAt": "2025-12-27T06:41:36.852Z",
+    "prompt": "Build a todo app "
+  },
+  {
+    "jobId": "job-1766819023128",
+    "pid": 7544,
+    "port": 5277,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766819023128",
+    "previewUrl": "http://127.0.0.1:5277/",
+    "createdAt": "2025-12-27T07:04:44.106Z",
+    "prompt": "Build a todo app with filters, due dates, and localStorage"
+  },
+  {
+    "jobId": "job-1766819652598",
+    "pid": 8928,
+    "port": 5363,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766819652598",
+    "previewUrl": "http://127.0.0.1:5363/",
+    "createdAt": "2025-12-27T07:14:41.469Z",
+    "prompt": "Build a counter app with plus and minus buttons"
+  },
+  {
+    "jobId": "job-1766836847172",
+    "pid": 8512,
+    "port": 5382,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766836847172",
+    "previewUrl": "http://127.0.0.1:5382/",
+    "createdAt": "2025-12-27T12:01:33.182Z",
+    "prompt": "Build a counter app with plus and minus buttons"
+  },
+  {
+    "jobId": "job-1766838410572",
+    "pid": 17580,
+    "port": 5218,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766838410572",
+    "previewUrl": "http://127.0.0.1:5218/",
+    "createdAt": "2025-12-27T12:27:27.408Z",
+    "prompt": "Build a counter app with plus and minus buttons"
+  },
+  {
+    "jobId": "3",
+    "pid": 196,
+    "port": 5358,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766845373899-3",
+    "previewUrl": "http://127.0.0.1:5358/",
+    "createdAt": "2025-12-27T14:23:37.597Z",
+    "prompt": "Make a simple landing page"
+  },
+  {
+    "jobId": "4",
+    "pid": 13784,
+    "port": 5287,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766879718429-4",
+    "previewUrl": "http://127.0.0.1:5287/",
+    "createdAt": "2025-12-27T23:56:35.678Z",
+    "prompt": "Build a counter app with plus and minus buttons",
+    "source": "queue"
+  },
+  {
+    "jobId": "5",
+    "pid": 11100,
+    "port": 5210,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766879935063-5",
+    "previewUrl": "http://127.0.0.1:5210/",
+    "createdAt": "2025-12-27T23:59:34.441Z",
+    "prompt": "Build a counter app with plus and minus buttons",
+    "source": "queue"
+  },
+  {
+    "jobId": "6",
+    "pid": 13972,
+    "port": 5374,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766882498182-6",
+    "previewUrl": "http://127.0.0.1:5374/",
+    "createdAt": "2025-12-28T00:42:44.836Z",
+    "prompt": "Build a counter app with plus and minus buttons",
+    "source": "queue"
+  },
+  {
+    "jobId": "7",
+    "pid": 6556,
+    "port": 5331,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766923843658-7",
+    "previewUrl": "http://127.0.0.1:5331/",
+    "createdAt": "2025-12-28T12:11:28.988Z",
+    "prompt": "Build a counter app with plus and minus buttons",
+    "source": "queue"
+  },
+  {
+    "jobId": "8",
+    "pid": 14236,
+    "port": 5321,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766926992900-8",
+    "previewUrl": "http://127.0.0.1:5321/",
+    "createdAt": "2025-12-28T13:03:50.026Z",
+    "prompt": "Build a counter app with plus and minus buttons",
+    "source": "queue"
+  },
+  {
+    "jobId": "9",
+    "pid": 10308,
+    "port": 5204,
+    "jobDir": "D:\\vibe-coding-platform\\workspace\\job-1766927042332-9",
+    "previewUrl": "http://127.0.0.1:5204/",
+    "createdAt": "2025-12-28T13:04:31.228Z",
+    "prompt": "Build a counter app with plus and minus buttons",
+    "source": "queue"
+  }
+]

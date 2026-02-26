@@ -1,0 +1,24 @@
+{
+  "planId": "plan-1766845022155",
+  "title": "Simple Landing Page",
+  "framework": "vite-react",
+  "prompt": "Make a simple landing page",
+  "createdAt": "2025-12-27T14:17:16.196Z",
+  "files": [
+    {
+      "path": "src/uiSettings.json",
+      "content": "{\n  \"colors\": {\n    \"background\": \"#f0f4f8\",\n    \"primary\": \"#0070f3\",\n    \"text\": \"#333333\"\n  },\n  \"font\": {\n    \"family\": \"Arial, sans-serif\",\n    \"size\": \"16px\"\n  },\n  \"spacing\": {\n    \"padding\": \"20px\",\n    \"margin\": \"10px\"\n  }\n}",
+      "purpose": "UI theme and settings for colors, fonts, and spacing"
+    },
+    {
+      "path": "src/main.jsx",
+      "content": "import React, { useEffect, useState } from 'react';\nimport ReactDOM from 'react-dom/client';\n\nfunction App() {\n  const [uiSettings, setUiSettings] = useState(null);\n\n  useEffect(() => {\n    fetch('./uiSettings.json')\n      .then(res => res.json())\n      .then(data => setUiSettings(data));\n  }, []);\n\n  if (!uiSettings) {\n    return <div>Loading...</div>;\n  }\n\n  const styles = {\n    container: {\n      backgroundColor: uiSettings.colors.background,\n      fontFamily: uiSettings.font.family,\n      fontSize: uiSettings.font.size,\n      color: uiSettings.colors.text,\n      padding: uiSettings.spacing.padding,\n      margin: 0,\n      minHeight: '100vh',\n      display: 'flex',\n      flexDirection: 'column',\n      justifyContent: 'center',\n      alignItems: 'center',\n      textAlign: 'center'\n    },\n    title: {\n      color: uiSettings.colors.primary,\n      marginBottom: uiSettings.spacing.margin\n    },\n    subtitle: {\n      marginBottom: uiSettings.spacing.margin\n    },\n    button: {\n      backgroundColor: uiSettings.colors.primary,\n      color: '#fff',\n      border: 'none',\n      padding: '10px 20px',\n      borderRadius: '5px',\n      cursor: 'pointer',\n      fontSize: '1rem'\n    }\n  };\n\n  return (\n    <div style={styles.container}>\n      <h1 style={styles.title}>Welcome to Our Landing Page</h1>\n      <p style={styles.subtitle}>We are glad to have you here. Discover our product and services.</p>\n      <button style={styles.button} onClick={() => alert('Thank you for your interest!')}>Get Started</button>\n    </div>\n  );\n}\n\nReactDOM.createRoot(document.getElementById('root')).render(<App />);\n",
+      "purpose": "Main React component that loads UI settings and renders the landing page with inline styles"
+    },
+    {
+      "path": "index.html",
+      "content": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Simple Landing Page</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n    <script type=\"module\" src=\"src/main.jsx\"></script>\n  </body>\n</html>\n",
+      "purpose": "HTML entry point for the Vite React app"
+    }
+  ]
+}

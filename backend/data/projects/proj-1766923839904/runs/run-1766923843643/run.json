@@ -1,0 +1,18 @@
+{
+  "runId": "run-1766923843643",
+  "projectId": "proj-1766923839904",
+  "planId": "plan-1766923804684",
+  "prompt": "Build a counter app with plus and minus buttons",
+  "framework": "vite-react",
+  "repoId": "repo-1766882370931",
+  "selectedPaths": [
+    "src/App.jsx",
+    "src/uiSettings.json"
+  ],
+  "jobId": "7",
+  "status": "completed",
+  "createdAt": "2025-12-28T12:10:43.644Z",
+  "endedAt": "2025-12-28T12:11:29.063Z",
+  "previewUrl": "http://127.0.0.1:5331/",
+  "failedReason": ""
+}

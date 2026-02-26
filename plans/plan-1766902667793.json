@@ -1,0 +1,20 @@
+{
+  "planId": "plan-1766902667793",
+  "title": "Counter App",
+  "framework": "vite-react",
+  "prompt": "Build a counter app with plus and minus buttons",
+  "repoId": null,
+  "createdAt": "2025-12-28T06:17:53.896Z",
+  "files": [
+    {
+      "path": "src/main.jsx",
+      "content": "import React, { useState } from \"react\";\nimport ReactDOM from \"react-dom/client\";\nimport uiSettings from \"./uiSettings.json\";\n\nfunction App() {\n  const [count, setCount] = useState(0);\n\n  const buttonStyle = uiSettings.button;\n  const counterStyle = uiSettings.counter;\n  const containerStyle = uiSettings.container;\n\n  return (\n    <div style={containerStyle}>\n      <div style={counterStyle}>{count}</div>\n      <div>\n        <button\n          style={buttonStyle}\n          onClick={() => setCount(count - 1)}\n          aria-label=\"Decrease count\"\n        >\n          -\n        </button>\n        <button\n          style={buttonStyle}\n          onClick={() => setCount(count + 1)}\n          aria-label=\"Increase count\"\n        >\n          +\n        </button>\n      </div>\n    </div>\n  );\n}\n\nReactDOM.createRoot(document.getElementById(\"root\")).render(<App />);\n",
+      "purpose": "Main React component rendering the counter UI and applying styles from uiSettings.json"
+    },
+    {
+      "path": "src/uiSettings.json",
+      "content": "{\n  \"background\": \"#0b1020\",\n  \"panelBackground\": \"#ffffff\",\n  \"text\": \"#0f172a\",\n  \"accent\": \"#4f46e5\",\n  \"radius\": 12,\n  \"padding\": 14,\n  \"fontScale\": 1\n}",
+      "purpose": "UI theme/settings used by the app for styling."
+    }
+  ]
+}

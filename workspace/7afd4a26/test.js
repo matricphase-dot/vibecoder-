@@ -1,0 +1,1 @@
+function testCounterLogic() { let counter = 0; function updateCounter(value) { counter += value; } function getCounter() { return counter; } updateCounter(1); if (getCounter() !== 1) { throw new Error('Counter logic failed'); } updateCounter(-1); if (getCounter() !== 0) { throw new Error('Counter logic failed'); } console.log('Counter logic tests passed'); } testCounterLogic();

@@ -1,0 +1,43 @@
+import asyncio
+from src.agents.planner import PlannerAgent
+from src.agents.coder import CoderAgent
+from src.agents.verifier import VerifierAgent
+from src.memory.artifact_store import ArtifactStore
+from deployment.deployer import Deployer
+import uuid
+
+async def run_workflow(user_prompt: str):
+    store = ArtifactStore()
+    planner = PlannerAgent()
+    coder = CoderAgent()
+    verifier = VerifierAgent()
+    deployer = Deployer()
+
+    # Step 1: Plan
+    plan = await planner.create_plan(user_prompt)
+    print("?? Plan:", plan)
+
+    # Step 2: Generate code
+    project_id = str(uuid.uuid4())[:8]
+    files = await coder.generate_files(plan, project_id)
+    print("?? Generated files:", list(files.keys()))
+
+    # Step 3: Verify
+    project_path = f"workspace/{project_id}"
+    test_results = await verifier.verify_web_app(project_path, plan.get("verification_tests", []))
+    print("? Verification:", test_results)
+
+    if test_results["passed"]:
+        # Step 4: Deploy
+        url = await deployer.deploy(project_id)
+        store.store_success(user_prompt, plan, url)
+        print(f"?? Deployed to {url}")
+        return {"status": "success", "url": url}
+    else:
+        store.store_failure(user_prompt, plan, str(test_results["details"]))
+        print("? Verification failed. Learning from mistake.")
+        return {"status": "failed", "details": test_results["details"]}
+
+if __name__ == "__main__":
+    prompt = input("Describe the app you want to build: ")
+    asyncio.run(run_workflow(prompt))

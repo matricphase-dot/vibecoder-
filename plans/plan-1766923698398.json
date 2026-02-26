@@ -1,0 +1,20 @@
+{
+  "planId": "plan-1766923698398",
+  "title": "Counter App with Plus and Minus Buttons",
+  "framework": "vite-react",
+  "prompt": "Build a counter app with plus and minus buttons",
+  "repoId": "repo-1766882370931",
+  "createdAt": "2025-12-28T12:08:28.807Z",
+  "files": [
+    {
+      "path": "src/App.jsx",
+      "content": "import React, { useState } from \"react\";\nimport uiSettings from \"./uiSettings.json\";\n\nexport default function App() {\n  const [count, setCount] = useState(0);\n\n  const styles = {\n    app: {\n      backgroundColor: uiSettings.background,\n      color: uiSettings.textColor,\n      fontFamily: uiSettings.fontFamily,\n      fontSize: uiSettings.fontSize,\n      padding: uiSettings.containerPadding,\n      display: \"flex\",\n      flexDirection: \"column\",\n      alignItems: \"center\",\n      justifyContent: \"center\",\n      height: \"100vh\",\n      userSelect: \"none\"\n    },\n    count: {\n      margin: \"20px 0\",\n      fontWeight: \"bold\",\n      fontSize: uiSettings.fontSize * 2\n    },\n    button: {\n      backgroundColor: uiSettings.buttonBackground,\n      color: uiSettings.buttonTextColor,\n      border: \"none\",\n      borderRadius: uiSettings.buttonRadius,\n      padding: uiSettings.buttonPadding,\n      margin: \"0 10px\",\n      cursor: \"pointer\",\n      fontSize: uiSettings.fontSize,\n      minWidth: 60\n    },\n    buttonContainer: {\n      display: \"flex\",\n      flexDirection: \"row\",\n      justifyContent: \"center\",\n      alignItems: \"center\"\n    }\n  };\n\n  return (\n    <div style={styles.app}>\n      <h1>Counter App</h1>\n      <div style={styles.count}>{count}</div>\n      <div style={styles.buttonContainer}>\n        <button\n          style={styles.button}\n          onClick={() => setCount(count - 1)}\n          aria-label=\"Decrease count\"\n        >\n          -\n        </button>\n        <button\n          style={styles.button}\n          onClick={() => setCount(count + 1)}\n          aria-label=\"Increase count\"\n        >\n          +\n        </button>\n      </div>\n    </div>\n  );\n}\n",
+      "purpose": "Main React component implementing the counter app UI and logic, applying inline styles from uiSettings.json"
+    },
+    {
+      "path": "src/uiSettings.json",
+      "content": "{\n  \"background\": \"#0b1020\",\n  \"panelBackground\": \"#ffffff\",\n  \"text\": \"#0f172a\",\n  \"accent\": \"#4f46e5\",\n  \"radius\": 12,\n  \"padding\": 14,\n  \"fontScale\": 1\n}",
+      "purpose": "UI theme/settings used by the app for styling."
+    }
+  ]
+}

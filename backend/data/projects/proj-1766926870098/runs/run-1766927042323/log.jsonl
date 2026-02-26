@@ -1,0 +1,38 @@
+{"t":"2025-12-28T13:04:02.372Z","type":"meta","line":"Connected to logs for 9","data":{"jobId":"9"}}
+{"t":"2025-12-28T13:04:02.384Z","type":"log","line":"applyPlan: planId=__snapshot__","data":{"t":1766927042324}}
+{"t":"2025-12-28T13:04:02.384Z","type":"log","line":"applyPlan: loaded snapshot from run=run-1766926992811","data":{"t":1766927042330}}
+{"t":"2025-12-28T13:04:02.385Z","type":"log","line":"applyPlan: framework=vite-react","data":{"t":1766927042331}}
+{"t":"2025-12-28T13:04:02.385Z","type":"log","line":"applyPlan: workspace=D:\\vibe-coding-platform\\workspace\\job-1766927042332-9","data":{"t":1766927042333}}
+{"t":"2025-12-28T13:04:02.386Z","type":"log","line":"Scaffold: Vite React template...","data":{"t":1766927042335}}
+{"t":"2025-12-28T13:04:05.440Z","type":"log","line":"> npx","data":{"t":1766927045197}}
+{"t":"2025-12-28T13:04:05.441Z","type":"log","line":"> create-vite . --template react","data":{"t":1766927045197}}
+{"t":"2025-12-28T13:04:05.441Z","type":"log","line":"\u001b[90m|\u001b[39m","data":{"t":1766927045377}}
+{"t":"2025-12-28T13:04:05.441Z","type":"log","line":"\u001b[32mo\u001b[39m  Scaffolding project in D:\\vibe-coding-platform\\workspace\\job-1766927042332-9...","data":{"t":1766927045377}}
+{"t":"2025-12-28T13:04:05.442Z","type":"log","line":"\u001b[90m|\u001b[39m","data":{"t":1766927045402}}
+{"t":"2025-12-28T13:04:05.442Z","type":"log","line":"\u001b[90m—\u001b[39m  Done. Now run:","data":{"t":1766927045402}}
+{"t":"2025-12-28T13:04:05.443Z","type":"log","line":"  npm install","data":{"t":1766927045402}}
+{"t":"2025-12-28T13:04:05.443Z","type":"log","line":"  npm run dev","data":{"t":1766927045402}}
+{"t":"2025-12-28T13:04:05.953Z","type":"log","line":"applyPlan: writing 2 file(s)...","data":{"t":1766927045445}}
+{"t":"2025-12-28T13:04:05.953Z","type":"log","line":"Wrote: src/App.jsx","data":{"t":1766927045447}}
+{"t":"2025-12-28T13:04:05.954Z","type":"log","line":"Wrote: src/uiSettings.json","data":{"t":1766927045448}}
+{"t":"2025-12-28T13:04:05.954Z","type":"log","line":"Install: npm install ...","data":{"t":1766927045448}}
+{"t":"2025-12-28T13:04:23.392Z","type":"log","line":"added 157 packages, and audited 158 packages in 17s","data":{"t":1766927063356}}
+{"t":"2025-12-28T13:04:23.394Z","type":"log","line":"33 packages are looking for funding","data":{"t":1766927063357}}
+{"t":"2025-12-28T13:04:23.394Z","type":"log","line":"  run `npm fund` for details","data":{"t":1766927063357}}
+{"t":"2025-12-28T13:04:23.395Z","type":"log","line":"found 0 vulnerabilities","data":{"t":1766927063360}}
+{"t":"2025-12-28T13:04:23.898Z","type":"log","line":"Build: npm run build ...","data":{"t":1766927063464}}
+{"t":"2025-12-28T13:04:24.907Z","type":"log","line":"> job-1766927042332-9@0.0.0 build","data":{"t":1766927064726}}
+{"t":"2025-12-28T13:04:24.907Z","type":"log","line":"> vite build","data":{"t":1766927064726}}
+{"t":"2025-12-28T13:04:26.454Z","type":"log","line":"\u001b[36mvite v7.3.0 \u001b[32mbuilding client environment for production...\u001b[36m\u001b[39m","data":{"t":1766927066063}}
+{"t":"2025-12-28T13:04:26.455Z","type":"log","line":"transforming...","data":{"t":1766927066253}}
+{"t":"2025-12-28T13:04:30.565Z","type":"log","line":"\u001b[32m✓\u001b[39m 30 modules transformed.","data":{"t":1766927070326}}
+{"t":"2025-12-28T13:04:31.071Z","type":"log","line":"rendering chunks...","data":{"t":1766927070903}}
+{"t":"2025-12-28T13:04:31.071Z","type":"log","line":"computing gzip size...","data":{"t":1766927070981}}
+{"t":"2025-12-28T13:04:31.072Z","type":"log","line":"\u001b[2mdist/\u001b[22m\u001b[32mindex.html                 \u001b[39m\u001b[1m\u001b[2m  0.47 kB\u001b[22m\u001b[1m\u001b[22m\u001b[2m │ gzip:   0.31 kB\u001b[22m","data":{"t":1766927071029}}
+{"t":"2025-12-28T13:04:31.073Z","type":"log","line":"\u001b[2mdist/\u001b[22m\u001b[35massets/index-DQ3P1g1z.css  \u001b[39m\u001b[1m\u001b[2m  0.91 kB\u001b[22m\u001b[1m\u001b[22m\u001b[2m │ gzip:   0.49 kB\u001b[22m","data":{"t":1766927071029}}
+{"t":"2025-12-28T13:04:31.074Z","type":"log","line":"\u001b[2mdist/\u001b[22m\u001b[36massets/index-C86_0yKi.js   \u001b[39m\u001b[1m\u001b[2m392.19 kB\u001b[22m\u001b[1m\u001b[22m\u001b[2m │ gzip: 117.27 kB\u001b[22m","data":{"t":1766927071029}}
+{"t":"2025-12-28T13:04:31.074Z","type":"log","line":"\u001b[32m✓ built in 4.88s\u001b[39m","data":{"t":1766927071030}}
+{"t":"2025-12-28T13:04:31.582Z","type":"log","line":"Run: starting dev server on port 5204 ...","data":{"t":1766927071215}}
+{"t":"2025-12-28T13:04:31.584Z","type":"log","line":"applyPlan: previewUrl=http://127.0.0.1:5204/","data":{"t":1766927071229}}
+{"t":"2025-12-28T13:04:31.584Z","type":"log","line":"applyPlan: done","data":{"t":1766927071230}}
+{"t":"2025-12-28T13:04:31.588Z","type":"completed","line":"completed","data":{"jobId":"9","state":"completed","returnvalue":{"ok":true,"planId":"__snapshot__","pid":10308,"port":5204,"previewUrl":"http://127.0.0.1:5204/","jobDir":"D:\\vibe-coding-platform\\workspace\\job-1766927042332-9"}}}

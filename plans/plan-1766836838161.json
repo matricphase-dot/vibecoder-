@@ -1,0 +1,31 @@
+{
+  "planId": "plan-1766836838161",
+  "title": "Counter App with Vite React",
+  "framework": "vite-react",
+  "prompt": "Build a counter app with plus and minus buttons",
+  "createdAt": "2025-12-27T12:00:46.153Z",
+  "files": [
+    {
+      "path": "src/App.jsx",
+      "content": "import { useState } from 'react';\nimport './App.css';\n\nfunction App() {\n  const [count, setCount] = useState(0);\n\n  return (\n    <div className=\"app\">\n      <h1>Counter App</h1>\n      <div className=\"counter\">\n        <button onClick={() => setCount(count - 1)} aria-label=\"Decrease count\">-</button>\n        <span className=\"count\">{count}</span>\n        <button onClick={() => setCount(count + 1)} aria-label=\"Increase count\">+</button>\n      </div>\n    </div>\n  );\n}\n\nexport default App;\n",
+      "purpose": "Main application component implementing the counter with plus and minus buttons"
+    },
+    {
+      "path": "src/App.css",
+      "content": "body {\n  font-family: Arial, sans-serif;\n  background-color: #f9f9f9;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n}\n\n.app {\n  text-align: center;\n  background: white;\n  padding: 2rem 3rem;\n  border-radius: 8px;\n  box-shadow: 0 4px 12px rgba(0,0,0,0.1);\n}\n\n.counter {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  margin-top: 1rem;\n}\n\nbutton {\n  font-size: 2rem;\n  width: 3rem;\n  height: 3rem;\n  margin: 0 1rem;\n  cursor: pointer;\n  border: 1px solid #ccc;\n  border-radius: 4px;\n  background-color: #fff;\n  transition: background-color 0.2s ease;\n}\n\nbutton:hover {\n  background-color: #f0f0f0;\n}\n\n.count {\n  font-size: 2rem;\n  min-width: 3rem;\n  text-align: center;\n}\n",
+      "purpose": "Basic styling for the counter app including layout and button styles"
+    }
+  ],
+  "run": {
+    "install": [
+      "npm create vite@latest . -- --template react",
+      "npm install"
+    ],
+    "build": [
+      "npm run build"
+    ],
+    "dev": [
+      "npm run dev"
+    ]
+  }
+}

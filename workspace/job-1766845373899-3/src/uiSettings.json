@@ -1,0 +1,15 @@
+{
+  "colors": {
+    "background": "#f0f4f8",
+    "primary": "#0070f3",
+    "text": "#333333"
+  },
+  "font": {
+    "family": "Arial, sans-serif",
+    "size": "16px"
+  },
+  "spacing": {
+    "padding": "20px",
+    "margin": "10px"
+  }
+}

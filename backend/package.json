@@ -4,14 +4,25 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "worker": "node worker.js",
+    "dev": "concurrently -k -n server,worker -c blue,green \"node server.js\" \"node worker.js\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
+    "bullmq": "^5.66.3",
+    "diff": "^8.0.2",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.8.2",
     "openai": "^6.15.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

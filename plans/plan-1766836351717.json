@@ -1,0 +1,26 @@
+{
+  "planId": "plan-1766836351717",
+  "title": "Next.js Counter App",
+  "framework": "nextjs",
+  "prompt": "Build a counter app with plus and minus buttons",
+  "createdAt": "2025-12-27T11:52:38.806Z",
+  "files": [
+    {
+      "path": "pages/index.js",
+      "content": "import { useState } from 'react';\n\nexport default function Home() {\n  const [count, setCount] = useState(0);\n\n  return (\n    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Arial, sans-serif' }}>\n      <h1>Counter App</h1>\n      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>\n        <button onClick={() => setCount(count - 1)} aria-label=\"Decrease count\">-</button>\n        <span style={{ fontSize: '2rem', minWidth: '3rem', textAlign: 'center' }}>{count}</span>\n        <button onClick={() => setCount(count + 1)} aria-label=\"Increase count\">+</button>\n      </div>\n    </main>\n  );\n}\n",
+      "purpose": "Main page component implementing the counter with plus and minus buttons using React useState."
+    }
+  ],
+  "run": {
+    "install": [
+      "npx create-next-app@latest my-counter-app",
+      "cd my-counter-app"
+    ],
+    "build": [
+      "npm run build"
+    ],
+    "dev": [
+      "npm run dev"
+    ]
+  }
+}

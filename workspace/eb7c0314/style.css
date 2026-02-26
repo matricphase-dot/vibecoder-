@@ -1,0 +1,79 @@
+body {
+    font-family: 'Arial', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background-color: #f0f2f5;
+    color: #333;
+    text-align: center;
+}
+
+.counter-container {
+    background-color: #ffffff;
+    padding: 40px 60px;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 25px;
+}
+
+h1 {
+    color: #2c3e50;
+    margin: 0;
+    font-size: 2.5em;
+}
+
+#counter-display {
+    font-size: 5em;
+    font-weight: bold;
+    color: #3498db;
+    margin: 10px 0;
+    min-width: 100px; /* Ensure consistent width for varying digits */
+}
+
+.buttons {
+    display: flex;
+    gap: 25px;
+    margin-top: 15px;
+}
+
+button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 18px 35px;
+    font-size: 1.8em;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    min-width: 90px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+button:active {
+    background-color: #2471a3;
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+#decrement-btn {
+    background-color: #e74c3c; /* Red for minus */
+}
+
+#decrement-btn:hover {
+    background-color: #c0392b;
+}
+
+#decrement-btn:active {
+    background-color: #a93226;
+}

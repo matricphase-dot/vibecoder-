@@ -1,0 +1,24 @@
+{
+  "planId": "plan-1766879693640",
+  "title": "Counter App",
+  "framework": "vite-react",
+  "prompt": "Build a counter app with plus and minus buttons",
+  "createdAt": "2025-12-27T23:55:01.583Z",
+  "files": [
+    {
+      "path": "src/App.jsx",
+      "content": "import React, { useState } from \"react\";\nimport uiSettings from \"./uiSettings.json\";\n\nfunction App() {\n  const [count, setCount] = useState(0);\n\n  const styles = {\n    app: {\n      fontFamily: uiSettings.fontFamily,\n      backgroundColor: uiSettings.backgroundColor,\n      height: \"100vh\",\n      display: \"flex\",\n      flexDirection: \"column\",\n      justifyContent: \"center\",\n      alignItems: \"center\"\n    },\n    counter: {\n      fontSize: uiSettings.fontSize,\n      color: uiSettings.counterColor,\n      marginBottom: \"20px\"\n    },\n    button: {\n      backgroundColor: uiSettings.buttonColor,\n      color: uiSettings.buttonTextColor,\n      padding: uiSettings.buttonPadding,\n      border: \"none\",\n      borderRadius: uiSettings.buttonBorderRadius,\n      cursor: \"pointer\",\n      margin: \"0 10px\",\n      fontSize: \"18px\"\n    },\n    buttonContainer: {\n      display: \"flex\",\n      flexDirection: \"row\"\n    }\n  };\n\n  return (\n    <div style={styles.app}>\n      <div style={styles.counter}>{count}</div>\n      <div style={styles.buttonContainer}>\n        <button style={styles.button} onClick={() => setCount(count - 1)}>-</button>\n        <button style={styles.button} onClick={() => setCount(count + 1)}>+</button>\n      </div>\n    </div>\n  );\n}\n\nexport default App;\n",
+      "purpose": "Main React component implementing the counter with buttons styled using uiSettings.json"
+    },
+    {
+      "path": "src/main.jsx",
+      "content": "import React from \"react\";\nimport ReactDOM from \"react-dom/client\";\nimport App from \"./App\";\n\nReactDOM.createRoot(document.getElementById(\"root\")).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n);\n",
+      "purpose": "Entry point to render the React app"
+    },
+    {
+      "path": "src/uiSettings.json",
+      "content": "{\n  \"background\": \"#0b1020\",\n  \"panelBackground\": \"#ffffff\",\n  \"text\": \"#0f172a\",\n  \"accent\": \"#4f46e5\",\n  \"radius\": 12,\n  \"padding\": 14,\n  \"fontScale\": 1\n}",
+      "purpose": "UI theme/settings used by the app for styling."
+    }
+  ]
+}

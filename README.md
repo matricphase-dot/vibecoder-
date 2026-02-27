@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿# VibeCoder
 
 AI‑powered vibe coding platform with multi‑agent orchestration, self‑improvement, deployment to Vercel, GitHub integration, and more.
@@ -17,3 +18,7 @@ AI‑powered vibe coding platform with multi‑agent orchestration, self‑impro
 4. Add `.env` with your API keys (see `.env.example`)
 5. Run backend: `python run_final.py`
 6. Run frontend: `cd frontend && npm run dev`
+=======
+# vibecoder-
+"AI‑powered vibe coding platform with multi‑agent orchestration, self‑improvement, deployment, and GitHub integration"
+>>>>>>> aac34f69027b0cf54ba71f17826393b636eddf45

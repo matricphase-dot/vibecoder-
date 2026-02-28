@@ -8,8 +8,8 @@ if sys.platform == "win32":
 import uvicorn
 
 if __name__ == "__main__":
-    # Get the PORT from environment (Render sets this) or default to 8000
-    port = int(os.getenv("PORT", 8000))
+    # Get the PORT from environment (Render sets this) or default to 10000
+    port = int(os.getenv("PORT", 10000))
     # Bind to 0.0.0.0 to accept external connections
     host = os.getenv("HOST", "0.0.0.0")
 
@@ -18,5 +18,5 @@ if __name__ == "__main__":
         host=host,
         port=port,
         reload=False,          # Disable reload in production
-        workers=1               # Adjust as needed
+        workers=1
     )

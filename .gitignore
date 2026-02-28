@@ -53,3 +53,20 @@ backend/workspace/
 
 # Vercel
 .vercel
+
+# ChromaDB data
+chroma_data/
+# Backend models
+backend/models/
+# Training data
+training_data.jsonl
+# Python cache
+__pycache__/
+*.pyc
+# Frontend build
+frontend/dist/
+frontend/node_modules/
+# Environment files
+.env
+*.bak
+run_prod.py

@@ -140,6 +140,10 @@ export default function MainApp() {
   const [authEmail, setAuthEmail] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [currentWorkspace, setCurrentWorkspace] = useState(null);
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [workflows, setWorkflows] = useState([]);
   const [currentWorkflow, setCurrentWorkflow] = useState(null);
 
@@ -591,20 +595,35 @@ export default function MainApp() {
         </div>
         <div className="flex items-center gap-3">
           {/* User section */}
-          {user ? (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-                <User className="w-4 h-4 text-purple-400" />
-                <span className="text-sm text-gray-300">{user.username}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="p-2 rounded-full hover:bg-red-500/10 text-red-400 transition"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
+                    <div className="flex items-center gap-2">
+            {user && (
+              <>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
+                  <User className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm text-gray-300">{user.username}</span>
+                </div>
+                <button
+                  onClick={() => setShowWorkspaceModal(true)}
+                  className="p-2 rounded-full hover:bg-gray-800/50 text-gray-400 transition"
+                  title="Create Workspace"
+                >
+                  <Users className="w-5 h-5" />
+                </button>
+                <select
+                  value={currentWorkspace?.id}
+                  onChange={(e) => {
+                    const ws = workspaces.find(w => w.id === parseInt(e.target.value));
+                    setCurrentWorkspace(ws);
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700/50 text-white' : 'bg-white/50 border-gray-200/50 text-gray-900'} backdrop-blur-sm focus:ring-2 focus:ring-purple-500`}
+                >
+                  {workspaces.map(ws => (
+                    <option key={ws.id} value={ws.id}>{ws.name}</option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
           ) : (
             <button
               onClick={() => setAuthModalOpen(true)}
@@ -844,3 +863,4 @@ export default function MainApp() {
     </div>
   );
 }
+

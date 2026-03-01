@@ -6,9 +6,10 @@ if sys.platform == "win32":
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 import os
 import json
 from .agents.planner import PlannerAgent
@@ -19,15 +20,21 @@ from .agents.reviewer import ReviewerAgent
 from .core.project_manager import ProjectManager
 from backend.deployment.vercel_deployer import VercelDeployer
 from backend.src.memory.artifact_store import ArtifactStore
+from .auth import get_current_user, get_db
+from . import models
+from .routers import auth
+from .routers import workspaces
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI()
+app.include_router(auth.router)
+app.include_router(workspaces.router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[ "http://localhost:5173", "http://localhost:3000", "https://vibesy.vercel.app" ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,73 +46,22 @@ app.mount("/projects", StaticFiles(directory="workspace"), name="projects")
 vercel_token = os.getenv("VERCEL_TOKEN")
 deployer = VercelDeployer(vercel_token) if vercel_token else None
 
-@app.get("/")
-async def root():
-    return {"message": "VibeCoding Platform Backend"}
-
-
-@app.get("/projects/list")
-async def list_projects():
-    store = ArtifactStore()
-    projects = store.list_all_successes()
-    store.close()
-    return {"projects": projects}
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    with open("backend/static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.get("/projects/list")
-async def list_projects():
+async def list_projects(current_user: models.User = Depends(get_current_user)):
     store = ArtifactStore()
-    projects = store.list_all_successes()
+    projects = store.list_all_successes(user_id=current_user.id)
     store.close()
     return {"projects": projects}
-@app.get("/projects/list")
-async def list_projects():
-    store = ArtifactStore()
-    projects = store.list_all_successes()
-    store.close()
-    return {"projects": projects}
-
-@app.post("/deploy")
-async def deploy_project(req: dict):
-    project_id = req.get("project_id")
-    project_name = req.get("project_name")
-    if not project_id:
-        return {"error": "Missing project_id"}
-    project_path = f"workspace/{project_id}"
-    if not os.path.exists(project_path):
-        return {"error": "Project not found"}
-    if not deployer:
-        return {"error": "Vercel deployer not configured"}
-    try:
-        name = project_name or f"project-{project_id}"
-        url = await deployer.deploy(project_path, name)
-        return {"url": url}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.post("/deploy")
-async def deploy_project(req: dict):
-    project_id = req.get("project_id")
-    project_name = req.get("project_name")
-    if not project_id:
-        return {"error": "Missing project_id"}
-    project_path = f"workspace/{project_id}"
-    if not os.path.exists(project_path):
-        return {"error": "Project not found"}
-    if not deployer:
-        return {"error": "Vercel deployer not configured"}
-    try:
-        name = project_name or f"project-{project_id}"
-        url = await deployer.deploy(project_path, name)
-        return {"url": url}
-    except Exception as e:
-        return {"error": str(e)}
-
 
 @app.post("/debug")
 async def debug_specific_failure(req: dict):
     project_id = req.get("project_id")
     test_description = req.get("test_description")
-    file_name = req.get("file_name", None)
     
     if not project_id or not test_description:
         return {"error": "Missing project_id or test_description"}
@@ -114,28 +70,158 @@ async def debug_specific_failure(req: dict):
     if not os.path.exists(project_path):
         return {"error": "Project not found"}
     
-    # Read current files
     files = {}
     for fname in os.listdir(project_path):
         if fname.endswith(('.html', '.css', '.js')):
             with open(os.path.join(project_path, fname), 'r', encoding='utf-8') as f:
                 files[fname] = f.read()
     
-    # Create a minimal test_results structure
     test_results = {
         "passed": False,
         "details": [{"test": test_description, "passed": False, "details": "User requested fix"}]
     }
     plan = {"goal": "Fix specific issue", "steps": []}
     
-    # Run debugger
     debugger = DebuggerAgent()
     fixed_files = await debugger.debug_failure(project_path, files, test_results, plan)
     
     if fixed_files:
-        return {"success": True, "fixed_files": list(fixed_files.keys())}
+        diffs = {}
+        for fname, new_content in fixed_files.items():
+            old_content = files.get(fname, "")
+            diffs[fname] = {"old": old_content, "new": new_content}
+        return {"success": True, "fixed_files": list(fixed_files.keys()), "diffs": diffs}
     else:
         return {"success": False, "message": "Debugger could not fix the issue"}
+
+@app.post("/github/push")
+async def push_to_github(req: dict):
+    from github import Github, GithubException
+    import base64
+    from github import InputGitTreeElement
+    project_id = req.get("project_id")
+    repo_name = req.get("repo_name", f"vibecoder-{project_id}")
+    private = req.get("private", False)
+    description = req.get("description", f"Generated by VibeCoder")
+    
+    if not project_id:
+        return {"error": "Missing project_id"}
+    
+    project_path = f"workspace/{project_id}"
+    if not os.path.exists(project_path):
+        return {"error": "Project not found"}
+    
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return {"error": "GitHub token not configured"}
+    
+    try:
+        g = Github(token)
+        user = g.get_user()
+        repo = user.create_repo(
+            name=repo_name,
+            private=private,
+            description=description,
+            auto_init=False
+        )
+        
+        commit_message = "Initial commit from VibeCoder"
+        master_ref = repo.get_git_ref("heads/main")
+        master_sha = master_ref.object.sha
+        base_tree = repo.get_git_tree(master_sha)
+        
+        element_list = []
+        for root, dirs, files in os.walk(project_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                rel_path = os.path.relpath(file_path, project_path).replace("\\", "/")
+                blob = repo.create_git_blob(base64.b64encode(content).decode(), "base64")
+                element = InputGitTreeElement(rel_path, "100644", "blob", sha=blob.sha)
+                element_list.append(element)
+        
+        tree = repo.create_git_tree(element_list, base_tree)
+        commit = repo.create_git_commit(commit_message, tree, [repo.get_git_commit(master_sha)])
+        master_ref.edit(commit.sha)
+        
+        return {"success": True, "repo_url": repo.html_url}
+    except GithubException as e:
+        return {"error": f"GitHub error: {e.data.get('message', str(e))}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/export/{project_id}")
+async def export_project(project_id: str):
+    import zipfile
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+
+    project_path = f"workspace/{project_id}"
+    if not os.path.exists(project_path):
+        return {"error": "Project not found"}
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(project_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, project_path)
+                zip_file.write(file_path, arcname)
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={project_id}.zip"}
+    )
+
+@app.get("/preferences")
+async def get_preferences(current_user: models.User = Depends(get_current_user)):
+    store = ArtifactStore()
+    # For simplicity, we return all preferences (could filter by user)
+    prefs = store.get_all_preferences()
+    store.close()
+    return prefs
+
+@app.post("/preferences")
+async def set_preference(req: dict, current_user: models.User = Depends(get_current_user)):
+    key = req.get("key")
+    value = req.get("value")
+    if not key or not value:
+        return {"error": "Missing key or value"}
+    store = ArtifactStore()
+    store.store_preference(key, value)
+    store.close()
+    return {"success": True}
+
+
+@app.get("/workflows")
+async def get_workflows(current_user: models.User = Depends(get_current_user)):
+    store = ArtifactStore()
+    workflows = store.get_workflows(current_user.id)
+    store.close()
+    return {"workflows": workflows}
+
+@app.post("/workflows")
+async def save_workflow(req: dict, current_user: models.User = Depends(get_current_user)):
+    name = req.get("name")
+    workflow = req.get("workflow")
+    if not name or not workflow:
+        return {"error": "Missing name or workflow"}
+    store = ArtifactStore()
+    store.save_workflow(current_user.id, name, workflow)
+    store.close()
+    return {"success": True}
+
+@app.get("/workflows/{name}")
+async def get_workflow(name: str, current_user: models.User = Depends(get_current_user)):
+    store = ArtifactStore()
+    workflow = store.get_workflow(current_user.id, name)
+    store.close()
+    if workflow:
+        return {"workflow": workflow}
+    return {"error": "Workflow not found"}
 
 
 async def websocket_endpoint(websocket: WebSocket):
@@ -144,9 +230,26 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         data = await websocket.receive_json()
         user_prompt = data.get("prompt", "")
+        template = data.get("template", "vanilla")
+        token = data.get("token", None)
         
+        # Authenticate user if token provided
+        current_user = None
+        if token:
+            from .auth import get_current_user_from_token, get_db
+            db = next(get_db())
+            try:
+                current_user = await get_current_user_from_token(token, db)
+            except:
+                pass
+            finally:
+                db.close()
+        
+        user_id = current_user.id if current_user else None
+
         await websocket.send_json({"type": "status", "message": "?? Planning..."})
         planner = PlannerAgent()
+        # Pass template to planner? For now, we ignore.
         plan = await planner.create_plan(user_prompt)
         
         await websocket.send_json({
@@ -166,14 +269,32 @@ async def websocket_endpoint(websocket: WebSocket):
             "message": f"?? Generated {len(files)} files"
         })
 
+        # Run verifier and reviewer concurrently
         verifier = VerifierAgent()
-        test_results = await verifier.verify_web_app(project_path, plan.get("verification_tests", []))
+        reviewer = ReviewerAgent()
+        debugger = DebuggerAgent()
+
+        test_results_task = verifier.verify_web_app(project_path, plan.get("verification_tests", []))
+        review_task = reviewer.review_code(project_path, files, plan)
+        test_results, review = await asyncio.gather(test_results_task, review_task)
+
         passed = test_results['passed']
+
+        if review.get("suggestions"):
+            await websocket.send_json({"type": "status", "message": "?? Applying reviewer suggestions..."})
+            for fname, new_content in review["suggestions"].items():
+                filepath = os.path.join(project_path, fname)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                files[fname] = new_content
+                print(f"?? Reviewer improved {fname}")
+            test_results = await verifier.verify_web_app(project_path, plan.get("verification_tests", []))
+            passed = test_results['passed']
+
         attempts = 0
         while not passed and attempts < 1:
             attempts += 1
             await websocket.send_json({"type": "status", "message": f"?? Debugging attempt {attempts}..."})
-            debugger = DebuggerAgent()
             fixed_files = await debugger.debug_failure(project_path, files, test_results, plan)
             if fixed_files:
                 files.update(fixed_files)
@@ -182,18 +303,12 @@ async def websocket_endpoint(websocket: WebSocket):
             else:
                 break
 
-        await websocket.send_json({"type": "status", "message": "?? Reviewing code quality..."})
-        reviewer = ReviewerAgent()
-        review = await reviewer.review_code(project_path, files, plan)
         if not review.get("passed", True):
             issues = review.get("issues", [])
             await websocket.send_json({
                 "type": "status",
                 "message": f"?? Review found {len(issues)} issues: {', '.join(issues[:3])}"
             })
-            if review.get("suggestions"):
-                test_results = await verifier.verify_web_app(project_path, plan.get("verification_tests", []))
-                passed = test_results['passed']
         else:
             await websocket.send_json({"type": "status", "message": "? Code review passed"})
 
@@ -203,7 +318,6 @@ async def websocket_endpoint(websocket: WebSocket):
             "message": f"? Verification {'passed' if passed else 'failed'}"
         })
 
-        # Deployment
         url = None
         if passed and deployer:
             await websocket.send_json({"type": "status", "message": "?? Deploying to Vercel..."})
@@ -221,9 +335,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
         store = ArtifactStore()
         if passed:
-            store.store_success(user_prompt, plan, url)
+            store.store_success(user_prompt, plan, url, user_id)
         else:
-            store.store_failure(user_prompt, plan, str(test_results['details']))
+            store.store_failure(user_prompt, plan, str(test_results['details']), user_id)
 
         await websocket.send_json({
             "type": "complete",
@@ -243,13 +357,6 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if store:
             store.close()
-
-
-
-
-
-
-
 
 
 

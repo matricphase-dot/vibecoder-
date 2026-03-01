@@ -26,7 +26,7 @@ export default function Landing() {
           </span>
         </h2>
         <p className="text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
-          The most advanced AI-powered development platform. Describe your app, and our multi-agent system builds, tests, reviews, and deploys it � all autonomously.
+          The most advanced AI‑powered development platform. Describe your app, and our multi‑agent system builds, tests, reviews, and deploys it – all autonomously.
         </p>
         <div className="flex gap-4 justify-center">
           <Link
@@ -51,32 +51,32 @@ export default function Landing() {
           <FeatureCard
             icon={<Zap className="w-8 h-8 text-yellow-400" />}
             title="Lightning Fast"
-            description="Parallel agent execution � build apps in seconds, not minutes."
+            description="Parallel agent execution – build apps in seconds, not minutes."
           />
           <FeatureCard
             icon={<Users className="w-8 h-8 text-blue-400" />}
-            title="Real-Time Collaboration"
+            title="Real‑Time Collaboration"
             description="Code together with your team, live sync and chat."
           />
           <FeatureCard
             icon={<Rocket className="w-8 h-8 text-green-400" />}
-            title="One-Click Deploy"
+            title="One‑Click Deploy"
             description="Push to Vercel, GitHub, or download as ZIP instantly."
           />
           <FeatureCard
             icon={<Shield className="w-8 h-8 text-red-400" />}
-            title="Self-Improving"
-            description="Learns from successes and failures � gets smarter over time."
+            title="Self‑Improving"
+            description="Learns from successes and failures – gets smarter over time."
           />
           <FeatureCard
             icon={<Code className="w-8 h-8 text-indigo-400" />}
-            title="Multi-Agent System"
+            title="Multi‑Agent System"
             description="Planner, Coder, Debugger, Reviewer, Deployer work as a team."
           />
           <FeatureCard
             icon={<Sparkles className="w-8 h-8 text-pink-400" />}
-            title="Voice & Multi-Model"
-            description="Voice input, choose between Groq, Gemini, or your fine-tuned model."
+            title="Voice & Multi‑Model"
+            description="Voice input, choose between Groq, Gemini, or your fine‑tuned model."
           />
         </div>
       </section>
@@ -97,7 +97,7 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8 text-center text-gray-400">
-        <p>� 2026 VibeCoder. All rights reserved.</p>
+        <p>© 2026 VibeCoder. All rights reserved.</p>
       </footer>
     </div>
   );

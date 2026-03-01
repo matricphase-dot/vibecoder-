@@ -1,20 +1,20 @@
 import json
 from datetime import datetime
 
-# Try to import chromadb, fallback to in-memory if not available
-try:
-    import chromadb
-    from chromadb.utils import embedding_functions
-    CHROMA_AVAILABLE = True
-except ImportError:
-    CHROMA_AVAILABLE = False
-    print("ChromaDB not installed. Using in-memory fallback.")
-
+# We'll import chromadb only when needed, and handle failure gracefully
 class ArtifactStore:
     def __init__(self, persist_directory="./chroma_data"):
-        self.CHROMA_AVAILABLE = CHROMA_AVAILABLE
-        if self.CHROMA_AVAILABLE:
-            self.client = chromadb.PersistentClient(path=persist_directory)
+        self.persist_directory = persist_directory
+        self.chroma_available = False
+        self.client = None
+        self.success_collection = None
+        self.failure_collection = None
+
+        # Try to import and initialize chromadb
+        try:
+            import chromadb
+            from chromadb.utils import embedding_functions
+            self.client = chromadb.PersistentClient(path=self.persist_directory)
             self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
             self.success_collection = self.client.get_or_create_collection(
                 name="successes",
@@ -24,18 +24,20 @@ class ArtifactStore:
                 name="failures",
                 embedding_function=self.embedding_fn
             )
-        else:
-            # In-memory fallback
+            self.chroma_available = True
+            print("? ChromaDB initialized.")
+        except Exception as e:
+            print(f"?? ChromaDB not available: {e}. Using in-memory fallback.")
+            self.chroma_available = False
             self.successes = []
             self.failures = []
-            print("Using in-memory fallback for ArtifactStore.")
 
     def close(self):
-        if self.CHROMA_AVAILABLE:
-            pass  # Chroma persists automatically
+        pass
 
     def store_success(self, task: str, plan: dict, final_url: str = None, user_id: int = None):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
+            import json
             plan_str = json.dumps(plan)
             metadata = {
                 "task": task,
@@ -61,7 +63,8 @@ class ArtifactStore:
             print(f"? Stored success in memory: {task[:50]}...")
 
     def store_failure(self, task: str, plan: dict, error: str, user_id: int = None):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
+            import json
             plan_str = json.dumps(plan)
             metadata = {
                 "task": task,
@@ -87,13 +90,12 @@ class ArtifactStore:
             print(f"? Stored failure in memory: {task[:50]}...")
 
     def get_similar_plans(self, task: str, limit=3):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             results = self.success_collection.query(query_texts=[task], n_results=limit)
             if results['metadatas'] and results['metadatas'][0]:
                 return [m['plan'] for m in results['metadatas'][0]]
             return []
         else:
-            # Simple keyword matching for in-memory
             keyword = task[:20].lower()
             results = []
             for s in self.successes:
@@ -102,7 +104,7 @@ class ArtifactStore:
             return results[:limit]
 
     def get_similar_failures(self, task: str, limit=3):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             results = self.failure_collection.query(query_texts=[task], n_results=limit)
             if results['metadatas'] and results['metadatas'][0]:
                 return [m['error'] for m in results['metadatas'][0]]
@@ -116,7 +118,7 @@ class ArtifactStore:
             return results[:limit]
 
     def list_all_successes(self, limit=50, user_id: int = None):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             if user_id is not None:
                 results = self.success_collection.get(
                     where={"user_id": str(user_id)},
@@ -136,14 +138,13 @@ class ArtifactStore:
             projects.sort(key=lambda x: x['timestamp'], reverse=True)
             return projects
         else:
-            # Filter in-memory
             filtered = [s for s in self.successes if user_id is None or s.get('user_id') == user_id]
             filtered.sort(key=lambda x: x['timestamp'], reverse=True)
             return filtered[:limit]
 
     def store_preference(self, key: str, value: str):
-        # Not implemented in fallback
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
+            import json
             collection = self.client.get_or_create_collection("preferences")
             collection.upsert(
                 documents=[value],
@@ -155,7 +156,7 @@ class ArtifactStore:
             print("Preferences not supported in fallback mode.")
 
     def get_preference(self, key: str) -> str:
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             collection = self.client.get_or_create_collection("preferences")
             results = collection.get(ids=[f"pref_{key}"])
             if results['documents']:
@@ -165,7 +166,7 @@ class ArtifactStore:
             return None
 
     def get_all_preferences(self):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             collection = self.client.get_or_create_collection("preferences")
             results = collection.get()
             prefs = {}
@@ -179,7 +180,8 @@ class ArtifactStore:
             return {}
 
     def save_workflow(self, user_id: int, name: str, workflow: dict):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
+            import json
             collection = self.client.get_or_create_collection("workflows")
             metadata = {
                 "user_id": str(user_id),
@@ -197,7 +199,7 @@ class ArtifactStore:
             print("Workflows not supported in fallback mode.")
 
     def get_workflows(self, user_id: int):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             collection = self.client.get_or_create_collection("workflows")
             results = collection.get(where={"user_id": str(user_id)})
             workflows = []
@@ -213,7 +215,7 @@ class ArtifactStore:
             return []
 
     def get_workflow(self, user_id: int, name: str):
-        if self.CHROMA_AVAILABLE:
+        if self.chroma_available:
             collection = self.client.get_or_create_collection("workflows")
             results = collection.get(ids=[f"workflow_{user_id}_{name}"])
             if results['metadatas']:

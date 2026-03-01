@@ -1,7 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-
-const API_BASE = import.meta.env.VITE_API_URL || `${API_BASE};
-const WS_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws') + '/ws' : WS_URL;
 import Editor from '@monaco-editor/react';
 import { 
   Sparkles, Terminal, Zap, Globe, Eye, History, 
@@ -13,6 +10,12 @@ import {
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { WorkflowBuilder } from './components/WorkflowBuilder';
+
+// API base URL from environment
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const WS_URL = import.meta.env.VITE_API_URL 
+  ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws') + '/ws'
+  : 'ws://localhost:8000/ws';
 
 // Agent icons with animation
 const agentIcons = {
@@ -30,7 +33,8 @@ function StatusIndicator({ status }) {
     working: 'bg-yellow-500 animate-pulse',
     done: 'bg-green-500'
   };
-  return <div className={`w-2 h-2 rounded-full ${colors[status]} shadow-lg`} />;
+  const className = `w-2 h-2 rounded-full ${colors[status]} shadow-lg`;
+  return <div className={className} />;
 }
 
 function AgentStatus({ agent }) {
@@ -156,7 +160,7 @@ export default function MainApp() {
     try {
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('http://localhost:8000/projects/list', { headers });
+      const res = await fetch(`${API_BASE}/projects/list`, { headers });
       const data = await res.json();
       setProjects(data.projects || []);
     } catch (err) {
@@ -238,7 +242,7 @@ export default function MainApp() {
 
   const deployProject = async (projectId, task) => {
     try {
-      const res = await fetch('http://localhost:8000/deploy', {
+      const res = await fetch(`${API_BASE}/deploy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectId, project_name: task.replace(/\s+/g, '-').toLowerCase() })
@@ -269,7 +273,7 @@ export default function MainApp() {
   const loadAllProjects = async () => {
     setLoadingDashboard(true);
     try {
-      const res = await fetch('http://localhost:8000/projects/list');
+      const res = await fetch(`${API_BASE}/projects/list`);
       const data = await res.json();
       setAllProjects(data.projects || []);
     } catch (err) {
@@ -280,7 +284,7 @@ export default function MainApp() {
   };
 
   const downloadProject = (projectId) => {
-    window.open(`http://localhost:8000/export/${projectId}`, '_blank');
+    window.open(`${API_BASE}/export/${projectId}`, '_blank');
   };
 
   const startListening = () => {
@@ -310,7 +314,7 @@ export default function MainApp() {
     if (!result) return;
     setFixing(true);
     try {
-      const res = await fetch('http://localhost:8000/debug', {
+      const res = await fetch(`${API_BASE}/debug`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -356,7 +360,7 @@ export default function MainApp() {
 
   const savePreference = async (key, value) => {
     try {
-      await fetch('http://localhost:8000/preferences', {
+      await fetch(`${API_BASE}/preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })
@@ -369,7 +373,7 @@ export default function MainApp() {
 
   const loadPreferences = async () => {
     try {
-      const res = await fetch('http://localhost:8000/preferences');
+      const res = await fetch(`${API_BASE}/preferences`);
       const data = await res.json();
       // setPreferences(data);
     } catch (err) {
@@ -387,7 +391,7 @@ export default function MainApp() {
     if (!selectedProject) return;
     setPushing(true);
     try {
-      const res = await fetch('http://localhost:8000/github/push', {
+      const res = await fetch(`${API_BASE}/github/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -414,7 +418,7 @@ export default function MainApp() {
   // Collaboration socket
   useEffect(() => {
     if (!collabEnabled) return;
-    const newSocket = io('http://localhost:8000/collab');
+    const newSocket = io(API_BASE, { path: '/collab/socket.io' });
     setSocket(newSocket);
     newSocket.on('connect', () => {
       console.log('Connected to collaboration server');
@@ -439,7 +443,7 @@ export default function MainApp() {
   // Auth functions
   const fetchUser = async () => {
     try {
-      const res = await fetch('http://localhost:8000/auth/me', {
+      const res = await fetch(`${API_BASE}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -461,7 +465,7 @@ export default function MainApp() {
     formData.append('username', authUsername);
     formData.append('password', authPassword);
     try {
-      const res = await fetch('http://localhost:8000/auth/login', {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData
@@ -488,7 +492,7 @@ export default function MainApp() {
     e.preventDefault();
     setAuthLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/auth/register', {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -523,7 +527,7 @@ export default function MainApp() {
   // Workflow functions
   const loadWorkflows = async () => {
     try {
-      const res = await fetch('http://localhost:8000/workflows', {
+      const res = await fetch(`${API_BASE}/workflows`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       const data = await res.json();
@@ -535,7 +539,7 @@ export default function MainApp() {
 
   const saveWorkflow = async (workflow) => {
     try {
-      const res = await fetch('http://localhost:8000/workflows', {
+      const res = await fetch(`${API_BASE}/workflows`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -840,4 +844,3 @@ export default function MainApp() {
     </div>
   );
 }
-

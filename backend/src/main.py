@@ -1,7 +1,6 @@
 import os
-
-sentry_sdk.init(
-    dsn=os.getenv('SENTRY_DSN'),
+import sentry_sdk
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
     traces_sample_rate=1.0,
     environment=os.getenv('ENVIRONMENT', 'development')
 )
@@ -20,7 +19,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-import os
 import json
 from .agents.planner import PlannerAgent
 from .agents.coder import CoderAgent
@@ -42,9 +40,8 @@ load_dotenv()
 
 app = FastAPI()
 
-import sentry_sdk
-from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
-
+sentry_sdk.init(
+    dsn=os.getenv('SENTRY_DSN'),
 app.include_router(auth.router)
 app.include_router(compliance.router)
 app.include_router(workspaces.router)
@@ -379,6 +376,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if store:
             store.close()
+
 
 
 

@@ -122,3 +122,4 @@ async def fix_issue(
     else:
         raise HTTPException(status_code=400, detail="Issue not fixable or fix not implemented")
 
+

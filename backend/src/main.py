@@ -1,3 +1,4 @@
+import os
 import sentry_sdk
 from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 
@@ -376,6 +377,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if store:
             store.close()
+
 
 
 

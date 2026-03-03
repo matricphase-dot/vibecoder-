@@ -21,3 +21,5 @@ sentry-sdk
 authlib
 
 email-validator
+
+beautifulsoup4

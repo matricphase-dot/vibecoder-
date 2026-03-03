@@ -75,4 +75,4 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
 # SAML stub (for future enterprise use)
 @router.get('/login/saml')
 async def login_saml(request: Request):
-    return {"message": "SAML login stub – to be implemented for enterprise customers."}
+    return {"message": "SAML login stub â€“ to be implemented for enterprise customers."}

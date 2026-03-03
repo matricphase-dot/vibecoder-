@@ -1161,7 +1161,7 @@ export default function MainApp() {
         </div>
       )}
 
-      {/* Other modals (auth, preferences, dashboard, github, diff, workflow) would go here – omitted for brevity but should be included if they exist in original file */}
+      {/* Other modals (auth, preferences, dashboard, github, diff, workflow) would go here â€“ omitted for brevity but should be included if they exist in original file */}
     </div>
   );
 }

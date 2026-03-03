@@ -935,16 +935,15 @@ export default function MainApp() {
             <span>Generate</span>
           </button>
         </div>
-                <select
-                  value={cloudProvider}
-                  onChange={(e) => setCloudProvider(e.target.value)}
-                  className={`px-3 py-2 rounded-lg text-sm border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700/50 text-white' : 'bg-white/50 border-gray-200/50 text-gray-900'} backdrop-blur-sm focus:ring-2 focus:ring-purple-500`}
-                >
-                  <option value="vercel">Vercel</option>
-                  <option value="aws">AWS</option>
-                  <option value="gcp">Google Cloud</option>
-            <option value='azure'>Azure</option>
-                </select>
+                          <select
+            value={cloudProvider}
+            onChange={(e) => setCloudProvider(e.target.value)}
+            className={`px-3 py-2 rounded-lg text-sm border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700/50 text-white' : 'bg-white/50 border-gray-200/50 text-gray-900'} backdrop-blur-sm focus:ring-2 focus:ring-purple-500`}
+          >
+            <option value="vercel">Vercel (Active)</option>
+            <option value="aws" disabled className="text-gray-500">AWS (Coming Soon)</option>
+            <option value="gcp" disabled className="text-gray-500">Google Cloud (Coming Soon)</option>
+          </select>
       </header>
 
       {/* Main content */}
@@ -1165,6 +1164,7 @@ export default function MainApp() {
     </div>
   );
 }
+
 
 
 

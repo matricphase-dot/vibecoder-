@@ -19,3 +19,5 @@ psycopg2-binary
 sentry-sdk
 
 authlib
+
+email-validator

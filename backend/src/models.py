@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, create_engine, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Float, JSON, create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -63,3 +63,4 @@ class MarketplaceItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     author = relationship("User", foreign_keys=[author_id])
+

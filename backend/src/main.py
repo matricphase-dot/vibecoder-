@@ -2,7 +2,6 @@ import os
     traces_sample_rate=1.0,
     environment=os.getenv('ENVIRONMENT', 'development')
 )
-app.add_middleware(SentryAsgiMiddleware)
 from src.routers import auth, workspaces, projects, domains, linter, deploy, export, preferences, compliance, activity, subscription, marketplace
 from src.routers import auth, workspaces, projects, domains, linter, deploy, export, preferences, compliance, activity, subscription, marketplace
 import asyncio
@@ -34,6 +33,7 @@ from .routers import linter
 from .routers import domains
 from dotenv import load_dotenv
 import os
+import os
 import sentry_sdk
 from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 
@@ -43,12 +43,11 @@ sentry_sdk.init(
     environment=os.getenv('ENVIRONMENT', 'development')
 )
 
+)
+
 load_dotenv()
 app = FastAPI()
 pp.add_middleware(SentryAsgiMiddleware)
-
-sentry_sdk.init(
-    dsn=os.getenv('SENTRY_DSN'),
 app.include_router(auth.router)
 app.include_router(compliance.router)
 app.include_router(workspaces.router)
@@ -383,6 +382,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if store:
             store.close()
+
 
 
 

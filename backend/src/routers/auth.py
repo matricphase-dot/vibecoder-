@@ -1,4 +1,5 @@
 from authlib.integrations.starlette_client import OAuth
+from src.database import get_db
 from starlette.config import Config
 from starlette.requests import Request
 import os

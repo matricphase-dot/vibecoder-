@@ -1,6 +1,4 @@
 import os
-import sentry_sdk
-from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
     traces_sample_rate=1.0,
     environment=os.getenv('ENVIRONMENT', 'development')
 )
@@ -35,10 +33,19 @@ from .routers import workspaces
 from .routers import linter
 from .routers import domains
 from dotenv import load_dotenv
+import os
+import sentry_sdk
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+
+sentry_sdk.init(
+    dsn=os.getenv('SENTRY_DSN'),
+    traces_sample_rate=1.0,
+    environment=os.getenv('ENVIRONMENT', 'development')
+)
 
 load_dotenv()
-
 app = FastAPI()
+pp.add_middleware(SentryAsgiMiddleware)
 
 sentry_sdk.init(
     dsn=os.getenv('SENTRY_DSN'),

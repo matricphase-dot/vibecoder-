@@ -1,6 +1,4 @@
 import os
-import sentry_sdk
-from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 
 sentry_sdk.init(
     dsn=os.getenv('SENTRY_DSN'),
@@ -43,6 +41,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
+
+import sentry_sdk
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+
 app.include_router(auth.router)
 app.include_router(compliance.router)
 app.include_router(workspaces.router)
@@ -377,6 +379,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if store:
             store.close()
+
 
 
 

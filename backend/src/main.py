@@ -1,3 +1,14 @@
+import sentry_sdk
+from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+
+sentry_sdk.init(
+    dsn=os.getenv('SENTRY_DSN'),
+    traces_sample_rate=1.0,
+    environment=os.getenv('ENVIRONMENT', 'development')
+)
+app.add_middleware(SentryAsgiMiddleware)
+from src.routers import auth, workspaces, projects, domains, linter, deploy, export, preferences, compliance, activity, subscription, marketplace
+from src.routers import auth, workspaces, projects, domains, linter, deploy, export, preferences, compliance, activity, subscription, marketplace
 import asyncio
 import sys
 import traceback
@@ -24,13 +35,19 @@ from .auth import get_current_user, get_db
 from . import models
 from .routers import auth
 from .routers import workspaces
+from .routers import linter
+from .routers import domains
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI()
 app.include_router(auth.router)
+app.include_router(compliance.router)
 app.include_router(workspaces.router)
+app.include_router(linter.router)
+app.include_router(domains.router)
+app.include_router(compliance.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -232,6 +249,8 @@ async def websocket_endpoint(websocket: WebSocket):
         user_prompt = data.get("prompt", "")
         template = data.get("template", "vanilla")
         token = data.get("token", None)
+        workspace_id = data.get("workspace_id", None)
+        backend_lang = data.get("backend_lang", "none")
         
         # Authenticate user if token provided
         current_user = None
@@ -250,7 +269,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({"type": "status", "message": "?? Planning..."})
         planner = PlannerAgent()
         # Pass template to planner? For now, we ignore.
-        plan = await planner.create_plan(user_prompt)
+        plan = await planner.create_plan(user_prompt, backend_lang)
         
         await websocket.send_json({
             "type": "plan",
@@ -335,9 +354,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
         store = ArtifactStore()
         if passed:
-            store.store_success(user_prompt, plan, url, user_id)
+            store.store_success(user_prompt, plan, url, user_id, workspace_id)
         else:
-            store.store_failure(user_prompt, plan, str(test_results['details']), user_id)
+            store.store_failure(user_prompt, plan, str(test_results['details']), user_id, workspace_id)
 
         await websocket.send_json({
             "type": "complete",
@@ -357,6 +376,17 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if store:
             store.close()
+
+
+
+
+
+
+
+
+
+
+
 
 
 

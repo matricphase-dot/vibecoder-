@@ -63,3 +63,5 @@ def remove_member(workspace_id: int, user_id: int, db: Session = Depends(auth.ge
     db.delete(target)
     db.commit()
     return {"message": "Member removed"}
+
+

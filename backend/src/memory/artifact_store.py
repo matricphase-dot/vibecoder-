@@ -35,7 +35,7 @@ class ArtifactStore:
     def close(self):
         pass
 
-    def store_success(self, task: str, plan: dict, final_url: str = None, user_id: int = None):
+    def store_success(self, task: str, plan: dict, final_url: str = None, user_id: int = None, workspace_id: int = None):
         if self.chroma_available:
             import json
             plan_str = json.dumps(plan)
@@ -44,7 +44,8 @@ class ArtifactStore:
                 "plan": plan_str,
                 "url": final_url or "",
                 "timestamp": datetime.now().isoformat(),
-                "user_id": str(user_id) if user_id else "anonymous"
+                "user_id": str(user_id) if user_id else "anonymous",
+                "workspace_id": str(workspace_id) if workspace_id else "none"
             }
             self.success_collection.add(
                 documents=[task],
@@ -58,11 +59,12 @@ class ArtifactStore:
                 "plan": plan,
                 "url": final_url,
                 "user_id": user_id,
+                "workspace_id": workspace_id,
                 "timestamp": datetime.now().isoformat()
             })
             print(f"? Stored success in memory: {task[:50]}...")
 
-    def store_failure(self, task: str, plan: dict, error: str, user_id: int = None):
+    def store_failure(self, task: str, plan: dict, error: str, user_id: int = None, workspace_id: int = None):
         if self.chroma_available:
             import json
             plan_str = json.dumps(plan)
@@ -71,7 +73,8 @@ class ArtifactStore:
                 "plan": plan_str,
                 "error": error,
                 "timestamp": datetime.now().isoformat(),
-                "user_id": str(user_id) if user_id else "anonymous"
+                "user_id": str(user_id) if user_id else "anonymous",
+                "workspace_id": str(workspace_id) if workspace_id else "none"
             }
             self.failure_collection.add(
                 documents=[task],
@@ -85,6 +88,7 @@ class ArtifactStore:
                 "plan": plan,
                 "error": error,
                 "user_id": user_id,
+                "workspace_id": workspace_id,
                 "timestamp": datetime.now().isoformat()
             })
             print(f"? Stored failure in memory: {task[:50]}...")
@@ -117,13 +121,15 @@ class ArtifactStore:
                     results.append(f["error"])
             return results[:limit]
 
-    def list_all_successes(self, limit=50, user_id: int = None):
+    def list_all_successes(self, limit=50, user_id: int = None, workspace_id: int = None):
         if self.chroma_available:
+            where_clause = {}
             if user_id is not None:
-                results = self.success_collection.get(
-                    where={"user_id": str(user_id)},
-                    limit=limit
-                )
+                where_clause["user_id"] = str(user_id)
+            if workspace_id is not None:
+                where_clause["workspace_id"] = str(workspace_id)
+            if where_clause:
+                results = self.success_collection.get(where=where_clause, limit=limit)
             else:
                 results = self.success_collection.get(limit=limit)
             projects = []
@@ -133,12 +139,13 @@ class ArtifactStore:
                         "task": meta['task'],
                         "url": meta['url'],
                         "timestamp": meta['timestamp'],
-                        "user_id": meta.get('user_id', 'anonymous')
+                        "user_id": meta.get('user_id', 'anonymous'),
+                        "workspace_id": meta.get('workspace_id', 'none')
                     })
             projects.sort(key=lambda x: x['timestamp'], reverse=True)
             return projects
         else:
-            filtered = [s for s in self.successes if user_id is None or s.get('user_id') == user_id]
+            filtered = [s for s in self.successes if (user_id is None or s.get('user_id') == user_id) and (workspace_id is None or s.get('workspace_id') == workspace_id)]
             filtered.sort(key=lambda x: x['timestamp'], reverse=True)
             return filtered[:limit]
 

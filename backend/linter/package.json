@@ -1,0 +1,11 @@
+{
+  "name": "vibecoder-linter",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "eslint": "^9.0.0",
+    "eslint-plugin-react": "^7.34.0",
+    "stylelint": "^16.0.0",
+    "stylelint-config-standard": "^36.0.0"
+  }
+}

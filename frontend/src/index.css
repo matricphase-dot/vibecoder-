@@ -1,3 +1,60 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Custom styles for better visibility */
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+@layer components {
+  /* Glass panels with solid backgrounds */
+  .glass-panel {
+    background-color: rgba(255, 255, 255, 0.95);
+  }
+  .dark .glass-panel {
+    background-color: rgba(17, 24, 39, 0.95);
+  }
+
+  /* Tab buttons with active state */
+  .tab-button {
+    @apply px-4 py-2 text-sm font-medium transition-colors;
+  }
+  .tab-button.active {
+    @apply text-purple-600 border-b-2 border-purple-600;
+  }
+  .dark .tab-button.active {
+    @apply text-purple-400 border-purple-400;
+  }
+
+  /* Ensure code editor background */
+  .monaco-editor {
+    @apply border border-gray-300;
+  }
+  .dark .monaco-editor {
+    @apply border-gray-700;
+  }
+
+  /* Bottom panel */
+  .bottom-panel-tabs {
+    @apply flex gap-2 p-2 border-b bg-white text-gray-900 border-gray-200;
+  }
+  .dark .bottom-panel-tabs {
+    @apply bg-gray-800 text-gray-100 border-gray-700;
+  }
+
+  .bottom-panel-content {
+    @apply flex-1 overflow-y-auto p-3 bg-white text-gray-900;
+  }
+  .dark .bottom-panel-content {
+    @apply bg-gray-900 text-gray-100;
+  }
+}
+
+/* Animated background blobs - lower opacity */
+.animate-blob {
+  opacity: 0.2;
+}
+.dark .animate-blob {
+  opacity: 0.1;
+}

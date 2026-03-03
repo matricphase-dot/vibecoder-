@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { WorkflowBuilder } from './components/WorkflowBuilder';
-import CompliancePanel from './components/CompliancePanel';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_URL = import.meta.env.VITE_API_URL 
@@ -98,7 +97,6 @@ export default function MainApp() {
   const [result, setResult] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [currentProject, setCurrentProject] = useState(null);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [files, setFiles] = useState({});
   const [activeFile, setActiveFile] = useState('index.html');
@@ -129,8 +127,6 @@ export default function MainApp() {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [isListening, setIsListening] = useState(false);
   const [template, setTemplate] = useState('vanilla');
-  const [backendLang, setBackendLang] = useState('none');
-  const [cloudProvider, setCloudProvider] = useState('vercel');
   const [model, setModel] = useState(localStorage.getItem('model') || 'groq');
   const [showDiff, setShowDiff] = useState(false);
   const [diffData, setDiffData] = useState(null);
@@ -149,10 +145,6 @@ export default function MainApp() {
   const [currentWorkspace, setCurrentWorkspace] = useState(null);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
-  const [workspaceMembers, setWorkspaceMembers] = useState([]);
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('viewer');
   const [lintResults, setLintResults] = useState(null);
   const [linting, setLinting] = useState(false);
   const [activeTab, setActiveTab] = useState('logs'); // 'logs' or 'lint'
@@ -220,58 +212,7 @@ export default function MainApp() {
     } catch (err) {
       alert('Error creating workspace');
     }
-  }
-    const loadWorkspaceMembers = async (workspaceId) => {
-    try {
-      const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/members`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      setWorkspaceMembers(data.members || []);
-    } catch (err) {
-      console.error('Failed to load workspace members', err);
-    }
   };
-
-    const inviteMember = async () => {
-    if (!currentWorkspace || !inviteEmail) return;
-    try {
-      const res = await fetch(`${API_BASE}/workspaces/${currentWorkspace.id}/members`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ user_email: inviteEmail, role: inviteRole })
-      });
-      if (res.ok) {
-        loadWorkspaceMembers(currentWorkspace.id);
-        setInviteEmail('');
-        alert('Member invited');
-      } else {
-        alert('Failed to invite member');
-      }
-    } catch (err) {
-      alert('Error inviting member');
-    }
-  };
-
-    const removeMember = async (userId) => {
-    if (!currentWorkspace) return;
-    try {
-      const res = await fetch(`${API_BASE}/workspaces/${currentWorkspace.id}/members/${userId}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        loadWorkspaceMembers(currentWorkspace.id);
-      } else {
-        alert('Failed to remove member');
-      }
-    } catch (err) {
-      alert('Error removing member');
-    }
-  };;
 
   const addLog = (message) => {
     setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: message }]);
@@ -294,7 +235,12 @@ export default function MainApp() {
     
     ws.current.onopen = () => {
       addLog('Connected to server');
-      ws.current.send(JSON.stringify({ prompt, template, token, workspace_id: currentWorkspace?.id, backend_lang: backendLang }));
+      ws.current.send(JSON.stringify({ 
+        prompt, 
+        template, 
+        token,
+        workspace_id: currentWorkspace?.id 
+      }));
     };
 
     ws.current.onmessage = (event) => {
@@ -804,13 +750,7 @@ export default function MainApp() {
                 {workspaces.map(ws => (
                   <option key={ws.id} value={ws.id}>{ws.name}</option>
                 ))}
-              </select><button
-    onClick={() => { loadWorkspaceMembers(currentWorkspace.id); setShowMembersModal(true); }}
-    className="p-2 rounded-full hover:bg-gray-800/50 text-gray-400 transition"
-    title="Manage Members"
-  >
-    <Users className="w-5 h-5" />
-  </button>
+              </select>
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-full hover:bg-red-500/10 text-red-400 transition"
@@ -880,24 +820,7 @@ export default function MainApp() {
           >
             <option value="vanilla">Vanilla</option>
             <option value="react">React</option>
-                        <option value="vanilla">Vanilla</option>
-            <option value="react">React</option>
             <option value="vue">Vue</option>
-            <option value="svelte">Svelte</option>
-            <option value="angular">Angular</option><option value="vue">Vue</option>
-          </select>
-          <select
-            value={backendLang}
-            onChange={(e) => setBackendLang(e.target.value)}
-            className={`px-3 py-2 rounded-lg text-sm border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700/50 text-white' : 'bg-white/50 border-gray-200/50 text-gray-900'} backdrop-blur-sm focus:ring-2 focus:ring-purple-500`}
-          >
-                        <option value="none">Frontend only</option>
-            <option value="node">+ Node.js Backend</option>
-            <option value="python">+ Python Backend</option>
-            <option value="go">+ Go Backend</option>
-            <option value="rust">+ Rust Backend</option><option value="none">Frontend only</option>
-            <option value="node">+ Node.js Backend</option>
-            <option value="python">+ Python Backend</option>
           </select>
 
           {/* Prompt input */}
@@ -935,16 +858,6 @@ export default function MainApp() {
             <span>Generate</span>
           </button>
         </div>
-                <select
-                  value={cloudProvider}
-                  onChange={(e) => setCloudProvider(e.target.value)}
-                  className={`px-3 py-2 rounded-lg text-sm border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700/50 text-white' : 'bg-white/50 border-gray-200/50 text-gray-900'} backdrop-blur-sm focus:ring-2 focus:ring-purple-500`}
-                >
-                  <option value="vercel">Vercel</option>
-                  <option value="aws">AWS</option>
-                  <option value="gcp">Google Cloud</option>
-            <option value='azure'>Azure</option>
-                </select>
       </header>
 
       {/* Main content */}
@@ -1079,7 +992,6 @@ export default function MainApp() {
           >
             Code Review {lintResults ? `(${Object.values(lintResults).flatMap(r => r.issues || []).length} issues)` : ''}
           </button>
-          <button onClick={() => setActiveTab('compliance')} className={`tab-button ${activeTab === 'compliance' ? 'active' : ''}`}><Shield className='w-4 h-4 inline mr-1' />Compliance</button>
         </div>
         {/* Logs panel */}
         {activeTab === 'logs' && (
@@ -1128,7 +1040,6 @@ export default function MainApp() {
             ))}
           </div>
         )}
-        {activeTab === 'compliance' && <CompliancePanel projectId={currentProject?.id} onClose={() => setActiveTab('logs')} />}
       </div>
 
       {/* Workspace create modal */}
@@ -1165,25 +1076,4 @@ export default function MainApp() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

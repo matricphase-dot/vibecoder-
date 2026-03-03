@@ -1,3 +1,7 @@
+import sys
+import os
+# Add backend directory to path so 'src' can be found
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 import asyncio
 import sys
 import os
@@ -30,3 +34,4 @@ if __name__ == "__main__":
         print(f"CRITICAL ERROR: {e}")
         print(traceback.format_exc())
         sys.exit(1)
+

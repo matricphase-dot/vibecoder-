@@ -1,2 +1,4 @@
 
 bandit
+
+sentry-sdk

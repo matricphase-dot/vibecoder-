@@ -12,6 +12,7 @@ import { io } from 'socket.io-client';
 import { WorkflowBuilder } from './components/WorkflowBuilder';
 import CompliancePanel from './components/CompliancePanel';
 
+
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_URL = import.meta.env.VITE_API_URL 
   ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws') + '/ws'
@@ -48,7 +49,7 @@ function ProjectItem({ project, onLoad, onJoin, onGitHub, onDownload }) {
   const [hover, setHover] = useState(false);
   const projId = extractProjectId(project.url);
 
-  return (
+  
     <div
       className="group relative flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-gray-800/40 to-gray-900/40 backdrop-blur-sm border border-gray-700/50 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 cursor-pointer"
       onMouseEnter={() => setHover(true)}
@@ -83,7 +84,6 @@ function ProjectItem({ project, onLoad, onJoin, onGitHub, onDownload }) {
         </button>
       </div>
     </div>
-  );
 }
 
 function extractProjectId(url) {
@@ -161,460 +161,6 @@ export default function MainApp() {
   const previewRef = useRef(null);
 
   useEffect(() => {
-    loadProjects();
-    if (token) fetchUser();
-    return () => {
-      if (ws.current) ws.current.close();
-    };
-  }, [token]);
-
-  useEffect(() => {
-    if (token) loadWorkspaces();
-  }, [token]);
-
-  const loadProjects = async () => {
-    setLoadingProjects(true);
-    try {
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${API_BASE}/projects/list`, { headers });
-      const data = await res.json();
-      setProjects(data.projects || []);
-    } catch (err) {
-      console.error('Failed to load projects', err);
-    } finally {
-      setLoadingProjects(false);
-    }
-  };
-
-  const loadWorkspaces = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/workspaces`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      setWorkspaces(data);
-      if (data.length > 0) setCurrentWorkspace(data[0]);
-    } catch (err) {
-      console.error('Failed to load workspaces', err);
-    }
-  };
-
-  const createWorkspace = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/workspaces`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ name: newWorkspaceName })
-      });
-      if (res.ok) {
-        loadWorkspaces();
-        setShowWorkspaceModal(false);
-        setNewWorkspaceName('');
-      } else {
-        alert('Failed to create workspace');
-      }
-    } catch (err) {
-      alert('Error creating workspace');
-    }
-  }
-    const loadWorkspaceMembers = async (workspaceId) => {
-    try {
-      const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/members`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      setWorkspaceMembers(data.members || []);
-    } catch (err) {
-      console.error('Failed to load workspace members', err);
-    }
-  };
-
-    const inviteMember = async () => {
-    if (!currentWorkspace || !inviteEmail) return;
-    try {
-      const res = await fetch(`${API_BASE}/workspaces/${currentWorkspace.id}/members`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ user_email: inviteEmail, role: inviteRole })
-      });
-      if (res.ok) {
-        loadWorkspaceMembers(currentWorkspace.id);
-        setInviteEmail('');
-        alert('Member invited');
-      } else {
-        alert('Failed to invite member');
-      }
-    } catch (err) {
-      alert('Error inviting member');
-    }
-  };
-
-    const removeMember = async (userId) => {
-    if (!currentWorkspace) return;
-    try {
-      const res = await fetch(`${API_BASE}/workspaces/${currentWorkspace.id}/members/${userId}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        loadWorkspaceMembers(currentWorkspace.id);
-      } else {
-        alert('Failed to remove member');
-      }
-    } catch (err) {
-      alert('Error removing member');
-    }
-  };;
-
-  const addLog = (message) => {
-    setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: message }]);
-  };
-
-  const updateAgentStatus = (agentName, status) => {
-    setAgents(prev => prev.map(a => a.name === agentName ? { ...a, status } : a));
-  };
-
-  const handleSubmit = async () => {
-    if (!prompt.trim()) return;
-    
-    setIsGenerating(true);
-    setLogs([]);
-    setResult(null);
-    setPreviewUrl(null);
-    setFiles({});
-
-    ws.current = new WebSocket(WS_URL);
-    
-    ws.current.onopen = () => {
-      addLog('Connected to server');
-      ws.current.send(JSON.stringify({ prompt, template, token, workspace_id: currentWorkspace?.id, backend_lang: backendLang }));
-    };
-
-    ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      addLog(data.message);
-      
-      if (data.type === 'plan') {
-        updateAgentStatus('Planner', 'done');
-        updateAgentStatus('Coder', 'working');
-      } else if (data.type === 'files') {
-        setFiles(data.files);
-        updateAgentStatus('Coder', 'done');
-        updateAgentStatus('Debugger', 'working');
-      } else if (data.type === 'verification' && data.results) {
-        setTestResults(data.results);
-        updateAgentStatus('Debugger', 'done');
-        if (!data.results.passed) {
-          updateAgentStatus('Reviewer', 'working');
-        }
-      } else if (data.type === 'complete') {
-        setResult(data);
-        setPreviewUrl(data.url);
-        updateAgentStatus('Reviewer', 'done');
-        updateAgentStatus('Deployer', 'working');
-        setIsGenerating(false);
-        ws.current.close();
-        loadProjects();
-      } else if (data.type === 'error') {
-        addLog(`? Error: ${data.message}`);
-        setIsGenerating(false);
-      }
-    };
-
-    ws.current.onerror = (error) => {
-      addLog(`WebSocket error: ${error.message}`);
-      setIsGenerating(false);
-    };
-
-    ws.current.onclose = () => {
-      addLog('Disconnected');
-      updateAgentStatus('Deployer', 'done');
-    };
-  };
-
-  const loadProject = (url) => {
-    setPreviewUrl(url);
-  };
-
-  const deployProject = async (projectId, task) => {
-    try {
-      const res = await fetch(`${API_BASE}/deploy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId, project_name: task.replace(/\s+/g, '-').toLowerCase() })
-      });
-      const data = await res.json();
-      if (data.url) {
-        alert(`? Deployed to ${data.url}`);
-        loadProjects();
-      } else {
-        alert(`? Deployment failed: ${data.error}`);
-      }
-    } catch (err) {
-      alert('Deployment request failed');
-    }
-  };
-
-  const handleEditorChange = (value) => {
-    setFiles(prev => ({ ...prev, [activeFile]: value }));
-    if (socket && roomId) {
-      socket.emit('code_change', {
-        room_id: roomId,
-        filename: activeFile,
-        content: value
-      });
-    }
-  };
-
-  const loadAllProjects = async () => {
-    setLoadingDashboard(true);
-    try {
-      const res = await fetch(`${API_BASE}/projects/list`);
-      const data = await res.json();
-      setAllProjects(data.projects || []);
-    } catch (err) {
-      console.error('Failed to load projects', err);
-    } finally {
-      setLoadingDashboard(false);
-    }
-  };
-
-  const downloadProject = (projectId) => {
-    window.open(`${API_BASE}/export/${projectId}`, '_blank');
-  };
-
-  const startListening = () => {
-    if (!('webkitSpeechRecognition' in window)) {
-      alert('Voice input is not supported in this browser. Try Chrome or Edge.');
-      return;
-    }
-    const recognition = new webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setPrompt(transcript);
-    };
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error', event.error);
-      setIsListening(false);
-    };
-    recognition.start();
-  };
-
-  const fixFailure = async (testDescription) => {
-    if (!result) return;
-    setFixing(true);
-    try {
-      const res = await fetch(`${API_BASE}/debug`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: result.project_id,
-          test_description: testDescription
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (data.diffs) {
-          setDiffData(data.diffs);
-          setShowDiff(true);
-        } else {
-          alert(`? Fixed files: ${data.fixed_files.join(', ')}`);
-          loadProject(result.url);
-        }
-      } else {
-        alert(`? Fix failed: ${data.message || 'Unknown error'}`);
-      }
-    } catch (err) {
-      alert('Fix request failed');
-    } finally {
-      setFixing(false);
-    }
-  };
-
-  const toggleCollab = () => {
-    setCollabEnabled(!collabEnabled);
-  };
-
-  const joinRoom = (projectId) => {
-    if (!socket) return;
-    socket.emit('join_room', { room_id: projectId });
-    setRoomId(projectId);
-    addLog(`?? Joining room ${projectId}...`);
-  };
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-  };
-
-  const savePreference = async (key, value) => {
-    try {
-      await fetch(`${API_BASE}/preferences`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value })
-      });
-      loadPreferences();
-    } catch (err) {
-      console.error('Failed to save preference', err);
-    }
-  };
-
-  const loadPreferences = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/preferences`);
-      const data = await res.json();
-      // setPreferences(data);
-    } catch (err) {
-      console.error('Failed to load preferences', err);
-    }
-  };
-
-  const saveModel = (newModel) => {
-    setModel(newModel);
-    localStorage.setItem('model', newModel);
-    savePreference('model', newModel);
-  };
-
-  const pushToGithub = async () => {
-    if (!selectedProject) return;
-    setPushing(true);
-    try {
-      const res = await fetch(`${API_BASE}/github/push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: extractProjectId(selectedProject.url),
-          repo_name: repoName || `vibecoder-${extractProjectId(selectedProject.url)}`,
-          private: repoPrivate,
-          description: selectedProject.task
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`? Pushed to GitHub: ${data.repo_url}`);
-        setGithubModalOpen(false);
-      } else {
-        alert(`? Push failed: ${data.error}`);
-      }
-    } catch (err) {
-      alert('Push request failed');
-    } finally {
-      setPushing(false);
-    }
-  };
-
-  const runLint = async () => {
-    if (Object.keys(files).length === 0) {
-      alert('No files to lint');
-      return;
-    }
-    setLinting(true);
-    try {
-      const res = await fetch(`${API_BASE}/lint`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ files })
-      });
-      const data = await res.json();
-      setLintResults(data.results);
-      setActiveTab('lint');
-    } catch (err) {
-      alert('Linting failed');
-    } finally {
-      setLinting(false);
-    }
-  };
-
-  const fetchDomains = async (projectId) => {
-    try {
-      const res = await fetch(`${API_BASE}/domains/${projectId}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      setDomains(prev => ({ ...prev, [projectId]: data.domains || [] }));
-    } catch (err) {
-      console.error('Failed to fetch domains', err);
-    }
-  };
-
-  const addDomain = async (projectId) => {
-    if (!newDomain) return;
-    setAddingDomain(projectId);
-    try {
-      const res = await fetch(`${API_BASE}/domains`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ project_id: projectId, domain: newDomain })
-      });
-      if (res.ok) {
-        fetchDomains(projectId);
-        setNewDomain('');
-      } else {
-        alert('Failed to add domain');
-      }
-    } catch (err) {
-      alert('Error adding domain');
-    } finally {
-      setAddingDomain(null);
-    }
-  };
-
-  const removeDomain = async (projectId, domain) => {
-    if (!confirm(`Remove domain ${domain}?`)) return;
-    try {
-      const res = await fetch(`${API_BASE}/domains/${projectId}/${domain}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        fetchDomains(projectId);
-      } else {
-        alert('Failed to remove domain');
-      }
-    } catch (err) {
-      alert('Error removing domain');
-    }
-  };
-
-  const verifyDomain = async (projectId, domain) => {
-    try {
-      const res = await fetch(`${API_BASE}/domains/${projectId}/${domain}/verify`, {
-        method: 'POST',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        alert('Domain verified!');
-        fetchDomains(projectId);
-      } else {
-        alert('Verification failed. Check DNS settings.');
-      }
-    } catch (err) {
-      alert('Error verifying domain');
-    }
-  };
-
-  useEffect(() => {
     if (!collabEnabled) return;
     const newSocket = io(API_BASE, { path: '/collab/socket.io' });
     setSocket(newSocket);
@@ -635,7 +181,9 @@ export default function MainApp() {
     newSocket.on('disconnect', () => {
       addLog('?? Collaboration disconnected');
     });
-    return () => newSocket.close();
+    return () => {
+      newSocket.close();
+    };
   }, [collabEnabled]);
 
   const fetchUser = async () => {
@@ -754,7 +302,9 @@ export default function MainApp() {
     }
   };
 
-  return (
+  
+  <>
+    
     <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-gray-50'}`}>
       {/* Animated background gradient */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -904,7 +454,7 @@ export default function MainApp() {
           <div className="relative w-96">
             <input
               type="text"
-              placeholder="Describe your app..."
+              placeholder="Describe your app..." className="prompt-input"
               className={`w-full px-4 py-2 rounded-lg border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700/50 text-white' : 'bg-white/50 border-gray-200/50 text-gray-900'} backdrop-blur-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent pr-10`}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -999,7 +549,7 @@ export default function MainApp() {
               <span className="px-4 py-2 text-sm text-gray-500">No files generated yet</span>
             )}
           </div>
-          <div className="flex-1">
+          <div className="code-editor flex-1"><div className="flex-1">
             <Editor
               height="100%"
               defaultLanguage="html"
@@ -1023,7 +573,7 @@ export default function MainApp() {
         </div>
 
         {/* Right - Live preview */}
-        <div className={`w-96 ${theme === 'dark' ? 'bg-gray-900/30 border-l border-gray-800/50' : 'bg-white/30 border-l border-gray-200/50'} backdrop-blur-xl p-4 overflow-hidden flex flex-col`}>
+        <div className={`live-preview w-96 ${theme === 'dark' ? 'bg-gray-900/30 border-l border-gray-800/50' : 'bg-white/30 border-l border-gray-200/50'} backdrop-blur-xl p-4 overflow-hidden flex flex-col`}>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2 text-gray-400">
             <Eye className="w-4 h-4" /> Live Preview
           </h3>
@@ -1056,7 +606,7 @@ export default function MainApp() {
       </div>
 
       {/* Bottom panel - Agent status and logs/lint */}
-      <div className={`h-64 border-t ${theme === 'dark' ? 'border-gray-800/50 bg-gray-900/30' : 'border-gray-200/50 bg-white/30'} backdrop-blur-xl flex flex-col`}>
+      <div className="bottom-panel <div className={`h-64 border-t ${theme === 'dark' ? 'border-gray-800/50 bg-gray-900/30' : 'border-gray-200/50 bg-white/30'} backdrop-blur-xl flex flex-col`}>
         {/* Agent status */}
         <div className="flex gap-2 p-3 border-b border-gray-800/30 overflow-x-auto">
           {agents.map(agent => (
@@ -1184,6 +734,11 @@ export default function MainApp() {
 
 
 
+
+
+
+
+  </>
 
 
 

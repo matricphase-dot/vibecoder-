@@ -59,6 +59,7 @@ class MarketplaceItem(Base):
     name = Column(String, nullable=False)
     description = Column(String)
     type = Column(String)  # 'agent', 'template'
+    category = Column(String, default='other')
     content = Column(JSON)  # For agents: code; for templates: file structure
     author_id = Column(Integer, ForeignKey("users.id"))
     downloads = Column(Integer, default=0)
@@ -93,5 +94,6 @@ class Feedback(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", foreign_keys=[user_id])
+
 
 

@@ -4,6 +4,7 @@ import { Download, Star, Upload, Filter, Search, MessageCircle, X } from 'lucide
 const Marketplace = () => {
     const [items, setItems] = useState([]);
     const [filter, setFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
@@ -169,7 +170,40 @@ const Marketplace = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border rounded-lg bg-gray-800/50 border-gray-700/50 text-white"
                     />
-                </div>
+            {/* Category filter */}
+            <div className="flex gap-2 mb-4">
+              <span className="text-sm text-gray-400 mr-2">Category:</span>
+              <button
+                onClick={() => setCategoryFilter('all')}
+                className={`px-3 py-1 rounded text-sm ${categoryFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setCategoryFilter('frontend')}
+                className={`px-3 py-1 rounded text-sm ${categoryFilter === 'frontend' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                Frontend
+              </button>
+              <button
+                onClick={() => setCategoryFilter('backend')}
+                className={`px-3 py-1 rounded text-sm ${categoryFilter === 'backend' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                Backend
+              </button>
+              <button
+                onClick={() => setCategoryFilter('utility')}
+                className={`px-3 py-1 rounded text-sm ${categoryFilter === 'utility' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                Utility
+              </button>
+              <button
+                onClick={() => setCategoryFilter('other')}
+                className={`px-3 py-1 rounded text-sm ${categoryFilter === 'other' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              >
+                Other
+              </button>
+            </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => setFilter('all')}
@@ -207,7 +241,7 @@ const Marketplace = () => {
                                 <p className="text-gray-400 text-sm mb-2">{item.description}</p>
                                 <span className="inline-block px-2 py-1 bg-purple-600/20 text-purple-400 text-xs rounded">
                                     {item.type}
-                                </span>
+                                </span><span className="ml-2 inline-block px-2 py-1 bg-gray-600/20 text-gray-400 text-xs rounded">{item.category}</span>
                             </div>
                             <div className="flex items-center gap-1">
                                 {renderStars(item.rating)}

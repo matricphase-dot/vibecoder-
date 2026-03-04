@@ -11,6 +11,7 @@ Base = declarative_base()
 
 class User(Base):
     plan = Column(String, default='free')
+    is_admin = Column(Boolean, default=False)
     reset_token = Column(String, nullable=True)
     reset_token_expires = Column(DateTime, nullable=True)
     trial_start = Column(DateTime, default=datetime.utcnow)
@@ -92,3 +93,4 @@ class Feedback(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", foreign_keys=[user_id])
+

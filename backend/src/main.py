@@ -3,7 +3,7 @@ import sentry_sdk
 from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.routers import auth, workspaces, projects, domains, linter, deploy, export, preferences, compliance, activity, marketplace, subscription, test, feedback
+from src.routers import auth, workspaces, projects, domains, linter, deploy, export, preferences, compliance, activity, marketplace, subscription, test, feedback, admin
 
 sentry_sdk.init(
     dsn=os.getenv('SENTRY_DSN'),
@@ -24,33 +24,34 @@ app.add_middleware(
 app.add_middleware(SentryAsgiMiddleware)
 
 app.include_router(auth.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(workspaces.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(projects.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(domains.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(linter.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(deploy.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(export.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(preferences.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(compliance.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(activity.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(marketplace.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\napp.include_router(subscription.router)
-app.include_router(feedback.router)\napp.include_router(test.router)
-app.include_router(feedback.router)\n
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(workspaces.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(projects.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(domains.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(linter.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(deploy.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(export.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(preferences.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(compliance.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(activity.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(marketplace.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(subscription.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\napp.include_router(test.router)
+app.include_router(admin.router)\napp.include_router(feedback.router)\n
 @app.get("/")
 async def root():
     return {"message": "VibeCoder API is running"}
+
 
 
 

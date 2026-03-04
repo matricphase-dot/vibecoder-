@@ -15,3 +15,4 @@ return (
 function ProjectItem({ project, onLoad, onJoin, onGitHub, onDownload }) {
   const [hover, setHover] = useState(false);
 
+

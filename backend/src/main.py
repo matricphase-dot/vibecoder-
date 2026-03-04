@@ -46,9 +46,11 @@ app.include_router(test.router)
 app.include_router(marketplace.router)
 app.include_router(test.router)
 app.include_router(subscription.router)
-app.include_router(test.router)\n
+app.include_router(test.router)
+
 @app.get("/")
 async def root():
     return {"message": "VibeCoder API is running"}
+
 
 

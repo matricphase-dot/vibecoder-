@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -32,6 +33,6 @@ def list_feedback(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """List all feedback (admin only – we can later add admin check)."""
+    """List all feedback (admin only ï¿½ we can later add admin check)."""
     # For now, any authenticated user can see feedback; we can restrict later.
     return db.query(models.Feedback).offset(skip).limit(limit).all()

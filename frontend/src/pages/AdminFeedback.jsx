@@ -73,7 +73,7 @@ const AdminFeedback = () => {
                             <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
                                     <span className="text-sm text-gray-400">User ID: {item.user_id || 'Anonymous'}</span>
-                                    <span className="text-xs text-gray-500">• {formatDate(item.created_at)}</span>
+                                    <span className="text-xs text-gray-500">â€¢ {formatDate(item.created_at)}</span>
                                 </div>
                                 <p className="text-white mb-2">{item.message}</p>
                                 <div className="flex items-center gap-2">

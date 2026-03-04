@@ -1,4 +1,5 @@
 return (
+  <>
       
       <FeedbackModal />
     <div className="group relative flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 hover:border-purple-500/50 transition-all duration-300">
@@ -13,6 +14,7 @@ return (
 }
 
 function ProjectItem({ project, onLoad, onJoin, onGitHub, onDownload }) {
+  </>
   const [hover, setHover] = useState(false);
 
 

@@ -80,3 +80,15 @@ class Review(Base):
     item = relationship("MarketplaceItem", back_populates="reviews")
     user = relationship("User", foreign_keys=[user_id])
 
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    message = Column(String, nullable=False)
+    page = Column(String, nullable=True)
+    rating = Column(Integer, nullable=True)  # optional satisfaction rating
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", foreign_keys=[user_id])

@@ -126,3 +126,19 @@ class Review(ReviewBase):
 
     class Config:
         from_attributes = True
+
+class FeedbackBase(BaseModel):
+    message: str
+    page: Optional[str] = None
+    rating: Optional[int] = None
+
+class FeedbackCreate(FeedbackBase):
+    pass
+
+class Feedback(FeedbackBase):
+    id: int
+    user_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

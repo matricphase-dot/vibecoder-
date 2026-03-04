@@ -109,3 +109,20 @@ class MarketplaceItem(MarketplaceItemBase):
     
     class Config:
         from_attributes = True
+
+class ReviewBase(BaseModel):
+    rating: int
+    comment: Optional[str] = None
+
+class ReviewCreate(ReviewBase):
+    pass
+
+class Review(ReviewBase):
+    id: int
+    item_id: int
+    user_id: int
+    created_at: datetime
+    user: Optional[dict]  # will contain username/email
+
+    class Config:
+        from_attributes = True

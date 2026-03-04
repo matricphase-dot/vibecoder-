@@ -60,3 +60,51 @@ def rate_item(item_id: int, rating: float, db: Session = Depends(get_db)):
     item.rating = (item.rating * item.downloads + rating) / (item.downloads + 1)
     db.commit()
     return {"new_rating": item.rating}
+
+@router.post("/items/{item_id}/reviews", response_model=schemas.Review)
+def create_review(
+    item_id: int,
+    review: schemas.ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Add a review to a marketplace item."""
+    item = db.query(models.MarketplaceItem).filter(models.MarketplaceItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # Check if user already reviewed this item
+    existing = db.query(models.Review).filter(
+        models.Review.item_id == item_id,
+        models.Review.user_id == current_user.id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="You have already reviewed this item")
+    
+    db_review = models.Review(
+        item_id=item_id,
+        user_id=current_user.id,
+        rating=review.rating,
+        comment=review.comment
+    )
+    db.add(db_review)
+    db.commit()
+    db.refresh(db_review)
+    
+    # Recalculate average rating for the item
+    reviews = db.query(models.Review).filter(models.Review.item_id == item_id).all()
+    avg_rating = sum(r.rating for r in reviews) / len(reviews)
+    item.rating = avg_rating
+    db.commit()
+    
+    return db_review
+
+@router.get("/items/{item_id}/reviews", response_model=List[schemas.Review])
+def get_item_reviews(item_id: int, db: Session = Depends(get_db)):
+    """Get all reviews for a marketplace item."""
+    reviews = db.query(models.Review).filter(models.Review.item_id == item_id).order_by(models.Review.created_at.desc()).all()
+    # Attach user info
+    for r in reviews:
+        r.user = {"username": r.user.username, "email": r.user.email}
+    return reviews
+

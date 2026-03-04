@@ -64,3 +64,16 @@ class MarketplaceItem(Base):
     
     author = relationship("User", foreign_keys=[author_id])
 
+
+class Review(Base):
+    __tablename__ = "reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("marketplace_items.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    rating = Column(Integer)  # 1-5
+    comment = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    item = relationship("MarketplaceItem", back_populates="reviews")
+    user = relationship("User", foreign_keys=[user_id])

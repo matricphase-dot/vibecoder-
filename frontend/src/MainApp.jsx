@@ -11,7 +11,6 @@ return (
           <a href="/terms" className="hover:text-purple-400">Terms</a>
         </div>
 
-}
 
 function ProjectItem({ project, onLoad, onJoin, onGitHub, onDownload }) {
   const [hover, setHover] = useState(false);

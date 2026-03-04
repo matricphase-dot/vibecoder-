@@ -11,6 +11,8 @@ Base = declarative_base()
 
 class User(Base):
     plan = Column(String, default='free')
+    reset_token = Column(String, nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
     trial_start = Column(DateTime, default=datetime.utcnow)
     projects_used = Column(Integer, default=0)
     max_projects = Column(Integer, default=999)
@@ -77,3 +79,4 @@ class Review(Base):
     
     item = relationship("MarketplaceItem", back_populates="reviews")
     user = relationship("User", foreign_keys=[user_id])
+

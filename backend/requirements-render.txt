@@ -2,3 +2,5 @@
 bandit
 
 sentry-sdk
+
+sendgrid

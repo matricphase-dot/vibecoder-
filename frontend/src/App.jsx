@@ -1,7 +1,8 @@
 import React from 'react';
 import Marketplace from './pages/Marketplace';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Landing from './pages/Landing';
+
+import ResetPassword from './pages/ResetPassword';
 import MainApp from './MainApp';
 
 function App() {
@@ -11,10 +12,12 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/app" element={<MainApp />} />
         <Route path="/marketplace" element={<Marketplace />} />
-      </Routes>
+                <Route path='/reset-password' element={<ResetPassword />} />
+        
     </BrowserRouter>
   );
 }
 
 export default App;
+
 

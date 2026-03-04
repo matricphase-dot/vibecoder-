@@ -77,3 +77,38 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
 @router.get('/login/saml')
 async def login_saml(request: Request):
     return {"message": "SAML login stub – to be implemented for enterprise customers."}
+
+@router.post("/password-reset/request")
+async def password_reset_request(email: str, db: Session = Depends(get_db)):
+    """Send password reset email."""
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        # Return success even if not found (security)
+        return {"message": "If that email exists, a reset link has been sent."}
+    
+    # Generate a reset token (store in DB with expiry)
+    token = secrets.token_urlsafe(32)
+    user.reset_token = token
+    user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+    db.commit()
+    
+    reset_link = f"{os.getenv('FRONTEND_URL')}/reset-password?token={token}"
+    from src.core.email import send_password_reset_email
+    send_password_reset_email(email, reset_link)
+    return {"message": "If that email exists, a reset link has been sent."}
+
+@router.post("/password-reset/confirm")
+async def password_reset_confirm(token: str, new_password: str, db: Session = Depends(get_db)):
+    """Reset password using token."""
+    user = db.query(models.User).filter(
+        models.User.reset_token == token,
+        models.User.reset_token_expires > datetime.utcnow()
+    ).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+    user.hashed_password = get_password_hash(new_password)
+    user.reset_token = None
+    user.reset_token_expires = None
+    db.commit()
+    return {"message": "Password updated successfully"}

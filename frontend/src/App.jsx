@@ -2,7 +2,9 @@ import React from 'react';
 import Marketplace from './pages/Marketplace';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
-import ResetPassword from './pages/ResetPassword';
+
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import MainApp from './MainApp';
 
 function App() {
@@ -19,5 +21,6 @@ function App() {
 }
 
 export default App;
+
 
 

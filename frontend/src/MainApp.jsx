@@ -41,8 +41,11 @@ function AgentStatus({ agent }) {
       <span className="text-gray-300 group-hover:text-purple-400 transition-colors">{agent.icon}</span>
       <span className="text-sm text-gray-300 group-hover:text-white transition-colors">{agent.name}</span>
       <StatusIndicator status={agent.status} />
-    </div>
-  );
+            <div className="absolute bottom-2 right-4 text-xs text-gray-500 flex gap-4">
+          <a href="/privacy" className="hover:text-purple-400">Privacy</a>
+          <a href="/terms" className="hover:text-purple-400">Terms</a>
+        </div>
+
 }
 
 function ProjectItem({ project, onLoad, onJoin, onGitHub, onDownload }) {
@@ -713,8 +716,11 @@ export default function MainApp() {
       )}
 
       {/* Other modals (auth, preferences, dashboard, github, diff, workflow) would go here – omitted for brevity but should be included if they exist in original file */}
-    </div>
-  );
+            <div className="absolute bottom-2 right-4 text-xs text-gray-500 flex gap-4">
+          <a href="/privacy" className="hover:text-purple-400">Privacy</a>
+          <a href="/terms" className="hover:text-purple-400">Terms</a>
+        </div>
+
 }
 
 
@@ -741,6 +747,7 @@ export default function MainApp() {
 
 
   </>
+
 
 
 

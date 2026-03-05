@@ -1,3 +1,8 @@
+import Landing from './pages/Landing';
+import Terms from './pages/Terms';
+import ResetPassword from './pages/ResetPassword';
+import BetaSignup from './pages/BetaSignup';
+import AdminFeedback from './pages/AdminFeedback';
 import React from "react";
 import Marketplace from "./pages/Marketplace";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -23,3 +28,4 @@ function App() {
 }
 
 export default App;
+

@@ -2,7 +2,6 @@ import boto3
 import os
 import zipfile
 import tempfile
-import shutil
 from botocore.exceptions import ClientError
 
 class AWSDeployer:

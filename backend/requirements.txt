@@ -6,3 +6,7 @@ transformers
 torch
 datasets
 accelerate
+
+boto3
+
+google-cloud-run

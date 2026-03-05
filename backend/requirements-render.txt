@@ -4,3 +4,7 @@ bandit
 sentry-sdk
 
 sendgrid
+
+boto3
+
+google-cloud-run

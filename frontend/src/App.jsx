@@ -17,12 +17,14 @@ function App() {
         <Route path="/marketplace" element={<Marketplace />} />
                 <Route path='/reset-password' element={<ResetPassword />} />
         
-        </Routes>
+                  <Route path='/beta' element={<BetaSignup />} />
+        
     </BrowserRouter>
   );
 }
 
 export default App;
+
 
 
 

@@ -143,3 +143,16 @@ class Feedback(FeedbackBase):
     class Config:
         from_attributes = True
 
+
+class BetaSignupBase(BaseModel):
+    email: str
+
+class BetaSignupCreate(BetaSignupBase):
+    pass
+
+class BetaSignup(BetaSignupBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

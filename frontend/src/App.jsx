@@ -5,7 +5,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import Privacy from './pages/Privacy';
 
-import AdminFeedback from './pages/AdminFeedback';
+
+import AdminBetaSignups from './pages/AdminBetaSignups';
 import MainApp from './MainApp';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
 }
 
 export default App;
+
 
 
 

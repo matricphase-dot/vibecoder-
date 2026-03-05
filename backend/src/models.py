@@ -64,6 +64,7 @@ class MarketplaceItem(Base):
     author_id = Column(Integer, ForeignKey("users.id"))
     downloads = Column(Integer, default=0)
     rating = Column(Float, default=0.0)
+    featured = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     author = relationship("User", foreign_keys=[author_id])
@@ -104,3 +105,4 @@ class BetaSignup(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+

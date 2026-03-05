@@ -156,3 +156,4 @@ class BetaSignup(BetaSignupBase):
 
     class Config:
         from_attributes = True
+

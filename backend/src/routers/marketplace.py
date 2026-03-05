@@ -107,5 +107,26 @@ def get_item_reviews(item_id: int, db: Session = Depends(get_db)):
         r.user = {"username": r.user.username, "email": r.user.email}
     return reviews
 
-
+@router.get("/items", response_model=List[schemas.MarketplaceItem])
+def list_items(
+    type: str = None,
+    sort: str = "newest",
+    featured_only: bool = False,
+    db: Session = Depends(get_db)
+):
+    """List marketplace items with sorting and featured filter."""
+    query = db.query(models.MarketplaceItem)
+    if type:
+        query = query.filter(models.MarketplaceItem.type == type)
+    if featured_only:
+        query = query.filter(models.MarketplaceItem.featured == True)
+    
+    if sort == "downloads":
+        query = query.order_by(models.MarketplaceItem.downloads.desc())
+    elif sort == "rating":
+        query = query.order_by(models.MarketplaceItem.rating.desc())
+    else:
+        query = query.order_by(models.MarketplaceItem.created_at.desc())
+    
+    return query.all()
 

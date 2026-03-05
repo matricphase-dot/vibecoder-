@@ -8,3 +8,5 @@ sendgrid
 boto3
 
 google-cloud-run
+
+sentry-sdk

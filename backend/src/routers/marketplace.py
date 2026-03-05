@@ -30,8 +30,7 @@ def create_item(
 ):
     """Publish a new item to the marketplace."""
     db_item = models.MarketplaceItem(
-        **item.dict(), category=item.category
-        author_id=current_user.id
+        **item.dict(), category=item.category, author_id=current_user.id
     )
     db.add(db_item)
     db.commit()
@@ -107,5 +106,6 @@ def get_item_reviews(item_id: int, db: Session = Depends(get_db)):
     for r in reviews:
         r.user = {"username": r.user.username, "email": r.user.email}
     return reviews
+
 
 

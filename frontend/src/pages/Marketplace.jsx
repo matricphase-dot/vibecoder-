@@ -13,7 +13,6 @@ const Marketplace = () => {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [sort, setSort] = useState("newest");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -36,7 +35,7 @@ const Marketplace = () => {
   const fetchItems = async () => {
     setLoading(true);
     try {
-      let url = `${import.meta.env.VITE_API_URL}/api/marketplace/items?sort=${sort}`;
+      let url = `${import.meta.env.VITE_API_URL}/api/marketplace/items`;
       if (filter !== "all") {
         url += `?type=${filter}`;
       }
@@ -195,19 +194,6 @@ const Marketplace = () => {
           />
         </div>
         <div className="flex gap-2 mb-4">
-          {/* Sort options */}
-          <div className="flex gap-2 mb-4 ml-auto">
-            <span className="text-sm text-gray-400 mr-2">Sort by:</span>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              className="px-3 py-1 rounded bg-gray-800 text-white border border-gray-700"
-            >
-              <option value="newest">Newest</option>
-              <option value="downloads">Most Downloads</option>
-              <option value="rating">Top Rated</option>
-            </select>
-          </div>
           <span className="text-sm text-gray-400 mr-2">Category:</span>
           <button
             onClick={() => setCategoryFilter("all")}

@@ -1,0 +1,223 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import Editor from '@monaco-editor/react';
+
+function App() {
+  const [files, setFiles] = useState({});
+  const [currentFile, setCurrentFile] = useState('index.html');
+  const [logs, setLogs] = useState([]);
+  const [ws, setWs] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [plans, setPlans] = useState(null);
+  const workspaceId = useRef(Math.floor(Math.random() * 10000));
+  const reconnectAttempts = useRef(0);
+
+  const addLog = (message, type = 'info') => {
+    setLogs(prev => [...prev, { message, type, timestamp: new Date().toLocaleTimeString() }]);
+  };
+
+  const connect = () => {
+    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/${workspaceId.current}`);
+    socket.onopen = () => {
+      setConnected(true);
+      reconnectAttempts.current = 0;
+      addLog('Connected to backend', 'success');
+    };
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+      } catch (e) {
+        addLog(`Invalid message: ${event.data}`, 'error');
+      }
+    };
+    socket.onclose = () => {
+      setConnected(false);
+      addLog('Disconnected from backend', 'error');
+      // Auto reconnect after 2 seconds
+      setTimeout(() => {
+        if (reconnectAttempts.current < 5) {
+          reconnectAttempts.current++;
+          addLog(`Reconnecting attempt ${reconnectAttempts.current}...`, 'info');
+          connect();
+        } else {
+          addLog('Max reconnect attempts reached. Please refresh the page.', 'error');
+        }
+      }, 2000);
+    };
+    socket.onerror = (error) => {
+      addLog(`WebSocket error: ${error.message || 'Unknown'}`, 'error');
+    };
+    setWs(socket);
+  };
+
+  useEffect(() => {
+    connect();
+    return () => {
+      if (ws) ws.close();
+    };
+  }, []);
+
+  const handleWebSocketMessage = (data) => {
+    switch (data.type) {
+      case 'log':
+        addLog(data.message, 'info');
+        break;
+      case 'plans':
+        setPlans(data.plans);
+        addLog(`Received ${data.plans.length} plans. Select one.`, 'success');
+        break;
+      case 'file':
+        setFiles(prev => ({ ...prev, [data.path]: data.content }));
+        addLog(`File created: ${data.path}`, 'success');
+        break;
+      case 'file_chunk':
+        setFiles(prev => ({
+          ...prev,
+          [data.path]: (prev[data.path] || '') + data.chunk
+        }));
+        break;
+      case 'done':
+        addLog(data.message, 'success');
+        setGenerating(false);
+        setPlans(null);
+        break;
+      case 'error':
+        addLog(`Error: ${data.message}`, 'error');
+        setGenerating(false);
+        setPlans(null);
+        break;
+      default:
+        console.log('Unknown message:', data);
+    }
+  };
+
+  const sendMessage = (type, payload = {}) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type, ...payload }));
+    } else {
+      addLog('Not connected to backend', 'error');
+    }
+  };
+
+  const handleGenerate = () => {
+    if (!prompt.trim()) {
+      addLog('Please enter a prompt', 'error');
+      return;
+    }
+    if (!connected) {
+      addLog('Cannot generate: not connected to backend', 'error');
+      return;
+    }
+    setGenerating(true);
+    setPlans(null);
+    setFiles({});
+    addLog(`Generating from prompt: ${prompt}`, 'info');
+    sendMessage('generate', { prompt });
+  };
+
+  const selectPlan = (index) => {
+    sendMessage('select_plan', { plan_index: index });
+    addLog(`Plan ${index + 1} selected, starting code generation...`, 'info');
+    setPlans(null);
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#111', color: '#eee' }}>
+      {/* Header */}
+      <div style={{ backgroundColor: '#1f1f1f', padding: '8px 16px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '20px' }}>??</span>
+          <h1 style={{ fontSize: '18px', margin: 0 }}>VibeCoder</h1>
+          <span style={{ fontSize: '12px', padding: '2px 6px', borderRadius: '4px', backgroundColor: connected ? '#2e7d32' : '#d32f2f' }}>
+            {connected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+        <button onClick={handleGenerate} disabled={generating || !connected} style={{ backgroundColor: '#7b1fa2', border: 'none', padding: '4px 12px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
+          {generating ? 'Generating...' : 'Generate'}
+        </button>
+      </div>
+
+      {/* Main area */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left: File tree */}
+        <div style={{ width: '200px', backgroundColor: '#1a1a1a', borderRight: '1px solid #333', overflow: 'auto' }}>
+          <div style={{ padding: '8px', borderBottom: '1px solid #333', fontWeight: 'bold' }}>?? Files</div>
+          <div style={{ padding: '8px' }}>
+            {Object.keys(files).length === 0 ? (
+              <div style={{ color: '#666', textAlign: 'center', padding: '20px' }}>No files yet.<br />Generate something!</div>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {Object.keys(files).map(file => (
+                  <li key={file} onClick={() => setCurrentFile(file)} style={{ padding: '4px 8px', cursor: 'pointer', backgroundColor: currentFile === file ? '#2c2c2c' : 'transparent', borderRadius: '4px', marginBottom: '2px' }}>
+                    ?? {file}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Center: Editor */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {plans && (
+            <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #333', padding: '12px' }}>
+              <div style={{ fontSize: '14px', marginBottom: '8px' }}>Choose implementation plan:</div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {plans.map((plan, idx) => (
+                  <button key={idx} onClick={() => selectPlan(idx)} style={{ flex: 1, backgroundColor: '#2c2c2c', border: 'none', padding: '12px', borderRadius: '6px', textAlign: 'left', cursor: 'pointer' }}>
+                    <div style={{ fontWeight: 'bold' }}>{plan.name}</div>
+                    <div style={{ fontSize: '12px', color: '#aaa' }}>{plan.description}</div>
+                    <div style={{ fontSize: '11px', color: '#9c27b0', marginTop: '4px' }}>Est. {plan.estimated_time}h</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ flex: 1 }}>
+            <Editor
+              height="100%"
+              language={currentFile.endsWith('.html') ? 'html' : currentFile.endsWith('.css') ? 'css' : 'javascript'}
+              theme="vs-dark"
+              value={files[currentFile] || '// Select or generate a file'}
+              onChange={(value) => setFiles(prev => ({ ...prev, [currentFile]: value }))}
+              options={{ minimap: { enabled: false }, fontSize: 14 }}
+            />
+          </div>
+        </div>
+
+        {/* Right: Logs */}
+        <div style={{ width: '280px', backgroundColor: '#1a1a1a', borderLeft: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '8px', borderBottom: '1px solid #333', fontWeight: 'bold' }}>?? Logs</div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '8px', fontSize: '12px', fontFamily: 'monospace' }}>
+            {logs.map((log, i) => (
+              <div key={i} style={{ marginBottom: '4px', color: log.type === 'error' ? '#f44336' : log.type === 'success' ? '#4caf50' : '#ccc' }}>
+                [{log.timestamp}] {log.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom prompt bar */}
+      <div style={{ backgroundColor: '#1f1f1f', borderTop: '1px solid #333', padding: '8px', display: 'flex', gap: '8px' }}>
+        <input
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+          placeholder="Describe the app you want to build..."
+          style={{ flex: 1, backgroundColor: '#2c2c2c', border: 'none', padding: '6px 12px', borderRadius: '4px', color: 'white' }}
+          disabled={generating}
+        />
+        <button onClick={handleGenerate} disabled={generating || !connected} style={{ backgroundColor: '#7b1fa2', border: 'none', padding: '6px 16px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
+          {generating ? 'Generating...' : 'Generate'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+

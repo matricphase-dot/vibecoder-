@@ -1,0 +1,41 @@
+﻿import ollama
+import json
+import re
+
+class Planner:
+    def __init__(self, model="mistral"):
+        self.model = model
+    
+    async def generate_plans(self, requirements):
+        system = "You create software implementation plans as JSON array."
+        user = f"""Requirements: {json.dumps(requirements)}
+Generate 3 plans (Fast, Scalable, Clean). Each plan must have:
+- name: string
+- description: string
+- estimated_time: integer (hours)
+- file_list: list of file paths (e.g., ["index.html", "style.css", "app.js"])
+- dependencies: list of package names (e.g., ["react", "lodash"])
+
+Return ONLY valid JSON array."""
+        try:
+            response = ollama.chat(model=self.model, messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ])
+            content = response['message']['content']
+            match = re.search(r'\[.*\]', content, re.DOTALL)
+            if match:
+                plans = json.loads(match.group())
+                # Ensure each plan has required fields
+                for p in plans:
+                    p.setdefault("file_list", ["index.html", "style.css", "script.js"])
+                    p.setdefault("dependencies", [])
+                return plans
+        except Exception as e:
+            print(f"Planner error: {e}")
+        # Fallback plans
+        return [
+            {"name":"Fast","description":"Quick prototype","estimated_time":1,"file_list":["index.html","style.css","script.js"],"dependencies":[]},
+            {"name":"Scalable","description":"Production ready","estimated_time":3,"file_list":["index.html","style.css","app.js"],"dependencies":["lodash"]},
+            {"name":"Clean","description":"Best practices","estimated_time":2,"file_list":["index.html","style.css","main.js"],"dependencies":[]}
+        ]

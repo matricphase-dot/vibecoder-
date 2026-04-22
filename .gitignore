@@ -1,0 +1,22 @@
+﻿# Heavy build artifacts and dependencies
+node_modules/
+frontend/node_modules/
+electron-app/
+chroma_data/
+dist-electron/
+.vite/
+venv/
+workspace/
+backend/src/workspace/
+*.pyc
+__pycache__/
+.env
+.DS_Store
+*.exe
+*.nupkg
+*.asar
+*.pyd
+*.dll
+*.so
+*.dylib
+*.log

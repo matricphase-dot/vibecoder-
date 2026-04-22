@@ -1,0 +1,256 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+
+function App() {
+  const [connected, setConnected] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [files, setFiles] = useState({});
+  const [currentFile, setCurrentFile] = useState('index.html');
+  const [activeTab, setActiveTab] = useState('editor');
+  const [previewKey, setPreviewKey] = useState(0);
+  const [plans, setPlans] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const workspaceId = useRef(Math.floor(Math.random() * 10000));
+  const wsRef = useRef(null);
+  const iframeRef = useRef(null);
+  const editorRef = useRef(null);
+  const reconnectAttempts = useRef(0);
+
+  const addLog = (msg, type = 'info') => {
+    setLogs(prev => [...prev, { msg, type, time: new Date().toLocaleTimeString() }]);
+  };
+
+  // WebSocket connection with manual reconnect (no auto‑refresh)
+  const connect = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/${workspaceId.current}`);
+    ws.onopen = () => {
+      setConnected(true);
+      reconnectAttempts.current = 0;
+      addLog('Connected to backend', 'success');
+    };
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'log') addLog(data.message, 'info');
+        else if (data.type === 'plans') setPlans(data.plans);
+        else if (data.type === 'file') setFiles(prev => ({ ...prev, [data.path]: data.content }));
+        else if (data.type === 'file_chunk') setFiles(prev => ({ ...prev, [data.path]: (prev[data.path] || '') + data.chunk }));
+        else if (data.type === 'done') { addLog(data.message, 'success'); setGenerating(false); setPlans(null); }
+        else if (data.type === 'error') { addLog(`Error: ${data.message}`, 'error'); setGenerating(false); setPlans(null); }
+      } catch(err) { addLog('Invalid message', 'error'); }
+    };
+    ws.onclose = () => {
+      setConnected(false);
+      addLog('Disconnected', 'error');
+      // Try to reconnect after 3 seconds, but do NOT reload the page
+      setTimeout(() => {
+        if (reconnectAttempts.current < 10) {
+          reconnectAttempts.current++;
+          addLog(`Reconnecting (attempt ${reconnectAttempts.current}/10)...`, 'info');
+          connect();
+        } else {
+          addLog('Max reconnects reached. Please refresh manually or check backend.', 'error');
+        }
+      }, 3000);
+    };
+    ws.onerror = () => addLog('WebSocket error', 'error');
+    wsRef.current = ws;
+  };
+
+  useEffect(() => {
+    connect();
+    return () => wsRef.current?.close();
+  }, []);
+
+  const sendMessage = (type, payload) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type, ...payload }));
+    } else {
+      addLog('Not connected', 'error');
+    }
+  };
+
+  const handleGenerate = () => {
+    if (!prompt.trim()) { addLog('Enter a prompt', 'error'); return; }
+    setGenerating(true);
+    setPlans(null);
+    setFiles({});
+    addLog(`Generating: ${prompt}`, 'info');
+    sendMessage('generate', { prompt });
+  };
+
+  const selectPlan = (idx) => {
+    sendMessage('select_plan', { plan_index: idx });
+    addLog(`Plan ${idx+1} selected`, 'info');
+    setPlans(null);
+  };
+
+  const getPreviewHtml = () => {
+    const html = files['index.html'] || '<html><body><h1>No index.html</h1></body></html>';
+    const css = files['style.css'] || '';
+    const js = files['script.js'] || '';
+    let preview = html;
+    if (css && !html.includes('<style')) preview = preview.replace('</head>', `<style>${css}</style></head>`);
+    if (js && !html.includes('<script')) preview = preview.replace('</body>', `<script>${js}</script></body>`);
+    return preview;
+  };
+
+  useEffect(() => {
+    if (activeTab === 'preview') setPreviewKey(prev => prev + 1);
+  }, [files, activeTab]);
+
+  // Inline styles (modern dark theme)
+  const styles = {
+    container: { height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', color: '#e1e1e1', fontFamily: 'system-ui, -apple-system, sans-serif' },
+    header: { backgroundColor: '#111', borderBottom: '1px solid #222', padding: '8px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    logo: { display: 'flex', alignItems: 'center', gap: '12px' },
+    badge: { fontSize: '12px', padding: '2px 8px', borderRadius: '20px', backgroundColor: connected ? '#10b981' : '#ef4444', color: 'white' },
+    buttonPrimary: { backgroundColor: '#3b82f6', border: 'none', padding: '6px 14px', borderRadius: '8px', color: 'white', cursor: 'pointer', fontSize: '13px', marginLeft: '8px' },
+    buttonSecondary: { backgroundColor: '#2a2a2a', border: 'none', padding: '6px 12px', borderRadius: '8px', color: '#e1e1e1', cursor: 'pointer', fontSize: '12px' },
+    main: { display: 'flex', flex: 1, overflow: 'hidden' },
+    sidebar: { width: sidebarCollapsed ? 0 : '220px', backgroundColor: '#0f0f0f', borderRight: '1px solid #222', overflow: 'auto', transition: 'width 0.2s' },
+    sidebarHeader: { padding: '12px', borderBottom: '1px solid #222', fontWeight: 'bold', fontSize: '13px' },
+    fileItem: { padding: '6px 12px', cursor: 'pointer', fontSize: '13px', borderRadius: '6px', margin: '2px 6px' },
+    activeFile: { backgroundColor: '#2a2a2a' },
+    content: { flex: 1, display: 'flex', flexDirection: 'column' },
+    tabBar: { display: 'flex', borderBottom: '1px solid #222', padding: '0 8px', backgroundColor: '#0f0f0f' },
+    tab: { padding: '8px 16px', cursor: 'pointer', fontSize: '13px', borderBottom: '2px solid transparent' },
+    activeTab: { borderBottomColor: '#3b82f6', color: 'white' },
+    editorArea: { flex: 1, position: 'relative' },
+    planContainer: { position: 'absolute', top: 12, left: 12, right: 12, backgroundColor: '#1a1a1a', borderRadius: '12px', padding: '12px', border: '1px solid #333', zIndex: 10 },
+    planCard: { backgroundColor: '#2a2a2a', borderRadius: '8px', padding: '12px', cursor: 'pointer', flex: 1, marginRight: '8px' },
+    logsPanel: { width: '280px', backgroundColor: '#0f0f0f', borderLeft: '1px solid #222', display: 'flex', flexDirection: 'column' },
+    logsHeader: { padding: '10px 12px', borderBottom: '1px solid #222', fontWeight: 'bold', fontSize: '13px', display: 'flex', justifyContent: 'space-between' },
+    logsList: { flex: 1, overflow: 'auto', padding: '8px', fontSize: '12px', fontFamily: 'monospace' },
+    inputBar: { backgroundColor: '#111', borderTop: '1px solid #222', padding: '8px 16px', display: 'flex', gap: '8px' },
+    input: { flex: 1, backgroundColor: '#2a2a2a', border: 'none', padding: '8px 12px', borderRadius: '8px', color: 'white', fontSize: '13px', outline: 'none' },
+  };
+
+  return (
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.logo}>
+          <span style={{ fontSize: '24px' }}>✨</span>
+          <span style={{ fontWeight: 'bold', fontSize: '18px' }}>VibeCoder</span>
+          <span style={styles.badge}>{connected ? 'Connected' : 'Disconnected'}</span>
+        </div>
+        <div>
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={styles.buttonSecondary}>📁</button>
+          <button onClick={handleGenerate} disabled={generating} style={styles.buttonPrimary}>
+            {generating ? 'Generating...' : 'Generate'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main area */}
+      <div style={styles.main}>
+        {/* Sidebar */}
+        {!sidebarCollapsed && (
+          <div style={styles.sidebar}>
+            <div style={styles.sidebarHeader}>📁 Explorer</div>
+            {Object.keys(files).length === 0 ? (
+              <div style={{ color: '#6a6a6a', textAlign: 'center', padding: '20px' }}>No files yet.<br />Generate something!</div>
+            ) : (
+              Object.keys(files).map(file => (
+                <div
+                  key={file}
+                  onClick={() => setCurrentFile(file)}
+                  style={{ ...styles.fileItem, ...(currentFile === file ? styles.activeFile : {}) }}
+                >
+                  📄 {file}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Editor / Preview */}
+        <div style={styles.content}>
+          <div style={styles.tabBar}>
+            <button onClick={() => setActiveTab('editor')} style={{ ...styles.tab, ...(activeTab === 'editor' ? styles.activeTab : {}) }}>Editor</button>
+            <button onClick={() => setActiveTab('preview')} style={{ ...styles.tab, ...(activeTab === 'preview' ? styles.activeTab : {}) }}>Preview</button>
+          </div>
+          <div style={styles.editorArea}>
+            {plans && (
+              <div style={styles.planContainer}>
+                <div style={{ marginBottom: '8px', fontSize: '13px' }}>Choose implementation plan:</div>
+                <div style={{ display: 'flex' }}>
+                  {plans.map((plan, idx) => (
+                    <div key={idx} onClick={() => selectPlan(idx)} style={styles.planCard}>
+                      <div style={{ fontWeight: 'bold' }}>{plan.name}</div>
+                      <div style={{ fontSize: '11px', color: '#aaa' }}>{plan.description}</div>
+                      <div style={{ fontSize: '10px', color: '#a855f7', marginTop: '4px' }}>⏱️ ~{plan.estimated_time}h</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {activeTab === 'editor' ? (
+              <React.Suspense fallback={<div style={{ color: 'white', padding: '20px' }}>Loading editor...</div>}>
+                <Editor
+                  height="100%"
+                  language={currentFile.endsWith('.html') ? 'html' : currentFile.endsWith('.css') ? 'css' : 'javascript'}
+                  theme="vs-dark"
+                  value={files[currentFile] || '// Select or generate a file'}
+                  onChange={(value) => setFiles(prev => ({ ...prev, [currentFile]: value }))}
+                  options={{ minimap: { enabled: false }, fontSize: 13 }}
+                />
+              </React.Suspense>
+            ) : (
+              <div style={{ width: '100%', height: '100%', backgroundColor: 'white' }}>
+                <iframe
+                  ref={iframeRef}
+                  key={previewKey}
+                  title="Preview"
+                  srcDoc={getPreviewHtml()}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Logs panel */}
+        <div style={styles.logsPanel}>
+          <div style={styles.logsHeader}>
+            <span>📋 Output</span>
+            <button onClick={() => setLogs([])} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer' }}>Clear</button>
+          </div>
+          <div style={styles.logsList}>
+            {logs.map((log, i) => (
+              <div key={i} style={{ marginBottom: '4px', color: log.type === 'error' ? '#f87171' : log.type === 'success' ? '#4ade80' : '#cbd5e1' }}>
+                [{log.time}] {log.msg}
+              </div>
+            ))}
+            {logs.length === 0 && <div style={{ color: '#6a6a6a', textAlign: 'center', padding: '20px' }}>No logs yet.</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Prompt bar */}
+      <div style={styles.inputBar}>
+        <input
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+          placeholder="Describe your app... (e.g., 'Create a to-do list')"
+          style={styles.input}
+          disabled={generating}
+        />
+        <button onClick={handleGenerate} disabled={generating} style={styles.buttonPrimary}>
+          {generating ? 'Generating...' : 'Generate'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Import Editor dynamically to avoid SSR issues
+const Editor = React.lazy(() => import('@monaco-editor/react'));
+
+export default App;

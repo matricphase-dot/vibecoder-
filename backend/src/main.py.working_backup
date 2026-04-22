@@ -1,0 +1,98 @@
+﻿import asyncio
+import json
+import os
+import subprocess
+import zipfile
+from pathlib import Path
+from typing import Dict, List, Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+import httpx
+import git
+from chromadb import Client as ChromaClient
+from chromadb.config import Settings as ChromaSettings
+
+# Import your existing modules (adjust paths as needed)
+from src.generation import GenerationOrchestrator
+from src.memory.chroma_manager import ChromaManager
+from src.memory.global_memory import GlobalMemory
+
+app = FastAPI(title="VibeCoder Backend", version="1.0.0")
+
+# CORS - allow all origins for development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize components
+orchestrator = GenerationOrchestrator()
+chroma_manager = ChromaManager()
+global_memory = GlobalMemory()
+
+# ========== WebSocket Handler ==========
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("✅ WebSocket client connected")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(f"📨 Received: {data}")
+            # Parse message
+            try:
+                msg = json.loads(data)
+                msg_type = msg.get("type", "")
+                if msg_type == "generate":
+                    prompt = msg.get("prompt", "")
+                    plan = msg.get("plan", "fast")
+                    template = msg.get("template", "vanilla")
+                    # Run generation pipeline
+                    async for chunk in orchestrator.generate(prompt, plan, template):
+                        await websocket.send_text(json.dumps(chunk))
+                else:
+                    await websocket.send_text(json.dumps({"type": "log", "message": f"Unknown message type: {msg_type}"}))
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"type": "log", "message": "Invalid JSON"}))
+    except WebSocketDisconnect:
+        print("❌ WebSocket client disconnected")
+    except Exception as e:
+        print(f"⚠️ WebSocket error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+# ========== REST Endpoints ==========
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
+@app.post("/api/generate")
+async def generate(request: dict):
+    # Similar to WebSocket but synchronous for HTTP
+    prompt = request.get("prompt")
+    plan = request.get("plan", "fast")
+    template = request.get("template", "vanilla")
+    result = await orchestrator.generate_sync(prompt, plan, template)
+    return result
+
+@app.post("/api/deploy/vercel")
+async def deploy_to_vercel(files: dict):
+    # Implement Vercel deployment
+    return {"message": "Deployment started"}
+
+@app.get("/api/export/zip")
+async def export_zip():
+    # Create zip of current workspace
+    zip_path = Path("workspace.zip")
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        # Add files logic
+        pass
+    return FileResponse(zip_path, media_type="application/zip", filename="vibecoder-workspace.zip")
+
+# Add more endpoints as needed (Git, templates, etc.)

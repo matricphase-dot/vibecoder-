@@ -1,0 +1,1131 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import Editor from '@monaco-editor/react';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { MonacoBinding } from 'y-monaco';
+import { 
+  Sparkles, FileCode, Eye, Play, Mic, GitBranch, Globe, Upload, Users, 
+  Settings, Bug, Wrench, RefreshCw, Target, CheckCircle, Circle, 
+  FolderTree, X, ChevronRight, ChevronDown, Zap, Loader2, MessageSquare,
+  Copy, Download, Share2, Check, AlertCircle, Menu, LogOut
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useHotkeys } from 'react-hotkeys-hook';
+
+// Fallback templates (same as before)
+const FALLBACK_TEMPLATES = [
+  { id: "vanilla", name: "Vanilla HTML/CSS/JS", description: "Plain HTML/CSS/JS starter", icon: "🌐", files: {
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>VibeCoder App</title><link rel='stylesheet' href='style.css'></head><body><div id='app'><h1>Hello VibeCoder</h1><p>Start editing!</p></div><script src='script.js'></script></body></html>",
+    "style.css": "body { font-family: sans-serif; margin: 2rem; } #app { text-align: center; }",
+    "script.js": "console.log('VibeCoder ready');"
+  }},
+  { id: "react", name: "React (with Vite)", description: "React 18 + Vite boilerplate", icon: "⚛️", files: {
+    "package.json": "{\"name\":\"vibecoder-react\",\"version\":\"1.0.0\",\"type\":\"module\",\"scripts\":{\"dev\":\"vite\",\"build\":\"vite build\"},\"dependencies\":{\"react\":\"^18.2.0\",\"react-dom\":\"^18.2.0\"},\"devDependencies\":{\"@vitejs/plugin-react\":\"^4.0.0\",\"vite\":\"^4.0.0\"}}",
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>React App</title></head><body><div id='root'></div><script type='module' src='/src/main.jsx'></script></body></html>",
+    "src/main.jsx": "import React from 'react'; import ReactDOM from 'react-dom/client'; import App from './App'; ReactDOM.createRoot(document.getElementById('root')).render(<App />);",
+    "src/App.jsx": "import React, { useState } from 'react'; import './App.css'; function App() { const [count, setCount] = useState(0); return (<div><h1>VibeCoder + React</h1><button onClick={() => setCount(c => c+1)}>count: {count}</button></div>); } export default App;",
+    "src/App.css": ".App { text-align: center; margin-top: 2rem; }"
+  }},
+  { id: "vue", name: "Vue 3 (with Vite)", description: "Vue 3 + Vite starter", icon: "💚", files: {
+    "package.json": "{\"name\":\"vibecoder-vue\",\"version\":\"1.0.0\",\"type\":\"module\",\"scripts\":{\"dev\":\"vite\",\"build\":\"vite build\"},\"dependencies\":{\"vue\":\"^3.3.4\"},\"devDependencies\":{\"@vitejs/plugin-vue\":\"^4.0.0\",\"vite\":\"^4.0.0\"}}",
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Vue App</title></head><body><div id='app'></div><script type='module' src='/src/main.js'></script></body></html>",
+    "src/main.js": "import { createApp } from 'vue'; import App from './App.vue'; createApp(App).mount('#app');",
+    "src/App.vue": "<template><div><h1>VibeCoder + Vue</h1><button @click='count++'>count: {{ count }}</button></div></template><script>export default { data() { return { count: 0 } } }</script><style>div { text-align: center; margin-top: 2rem; }</style>"
+  }},
+  { id: "svelte", name: "Svelte (with Vite)", description: "Svelte + Vite starter", icon: "🟠", files: {
+    "package.json": "{\"name\":\"vibecoder-svelte\",\"version\":\"1.0.0\",\"type\":\"module\",\"scripts\":{\"dev\":\"vite\",\"build\":\"vite build\"},\"dependencies\":{\"svelte\":\"^4.0.0\"},\"devDependencies\":{\"@sveltejs/vite-plugin-svelte\":\"^2.0.0\",\"vite\":\"^4.0.0\"}}",
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Svelte App</title></head><body><div id='app'></div><script type='module' src='/src/main.js'></script></body></html>",
+    "src/main.js": "import App from './App.svelte'; const app = new App({ target: document.getElementById('app') }); export default app;",
+    "src/App.svelte": "<script> let count = 0; </script><main><h1>VibeCoder + Svelte</h1><button on:click={() => count++}>count: {count}</button></main><style>main { text-align: center; margin-top: 2rem; }</style>"
+  }}
+];
+
+function App() {
+  const [files, setFiles] = useState({});
+  const [currentFile, setCurrentFile] = useState('index.html');
+  const [logs, setLogs] = useState([]);
+  const [ws, setWs] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [plans, setPlans] = useState(null);
+  const [activeTab, setActiveTab] = useState('editor');
+  const [previewKey, setPreviewKey] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const [branches, setBranches] = useState([]);
+  const [currentBranch, setCurrentBranch] = useState('main');
+  const [deploying, setDeploying] = useState(false);
+  const [collaborators, setCollaborators] = useState(1);
+  const [templates, setTemplates] = useState(FALLBACK_TEMPLATES);
+  const [showSettings, setShowSettings] = useState(false);
+  const [llmProvider, setLlmProvider] = useState('ollama');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmModel, setLlmModel] = useState('mistral');
+  const [suggestedFix, setSuggestedFix] = useState(null);
+  const [showFixButton, setShowFixButton] = useState(false);
+  const [suggestion, setSuggestion] = useState('');
+  const [showSuggestion, setShowSuggestion] = useState(false);
+  const [sessionGoal, setSessionGoal] = useState(null);
+  const [goalProgress, setGoalProgress] = useState(0);
+  const [silentMode, setSilentMode] = useState(true);
+  const [frustrationHelp, setFrustrationHelp] = useState(null);
+  const [useGlobalMemory, setUseGlobalMemory] = useState(true);
+  const [failureWarnings, setFailureWarnings] = useState([]);
+  const [showWarnings, setShowWarnings] = useState(false);
+  const [showFixOptions, setShowFixOptions] = useState(false);
+  const [fixOptions, setFixOptions] = useState(null);
+  const [currentError, setCurrentError] = useState('');
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [toast, setToast] = useState(null);
+  const suggestionTimeout = useRef(null);
+  const iframeRef = useRef(null);
+  const editorRef = useRef(null);
+  const yDocRef = useRef(null);
+  const yProviderRef = useRef(null);
+  const yBindingRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const workspaceId = useRef(Math.floor(Math.random() * 10000));
+  const reconnectAttempts = useRef(0);
+  const silentTimeout = useRef(null);
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const addLog = (message, type = 'info') => {
+    setLogs(prev => [...prev, { message, type, timestamp: new Date().toLocaleTimeString() }]);
+    if (type === 'success') showToast(message, 'success');
+    else if (type === 'error') showToast(message, 'error');
+  };
+
+  // Voice recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setPrompt(transcript);
+        addLog(`🎤 Voice: "${transcript}"`, 'success');
+        setIsListening(false);
+      };
+      recognitionRef.current.onerror = (event) => {
+        addLog(`🎤 Error: ${event.error}`, 'error');
+        setIsListening(false);
+      };
+      recognitionRef.current.onend = () => setIsListening(false);
+    } else {
+      addLog('Voice not supported', 'error');
+    }
+  }, []);
+
+  const startListening = async () => {
+    if (!recognitionRef.current) return;
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      recognitionRef.current.start();
+      setIsListening(true);
+      addLog('🎤 Listening...', 'info');
+    } catch (err) {
+      addLog(`🎤 Mic error: ${err.message}`, 'error');
+    }
+  };
+
+  const fetchSuggestion = async (text) => {
+    if (text.length < 5) return;
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/predict-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partial: text })
+      });
+      const data = await res.json();
+      if (data.full_prompt && data.full_prompt !== text) {
+        setSuggestion(data.full_prompt);
+        setShowSuggestion(true);
+        setTimeout(() => setShowSuggestion(false), 3000);
+      }
+    } catch(e) { console.error(e); }
+  };
+
+  // Debugging Brain
+  useEffect(() => {
+    const handleIframeErrors = (event) => {
+      if (iframeRef.current && event.source === iframeRef.current.contentWindow) {
+        const errorMsg = event.data?.message || event.message || 'Unknown error';
+        addLog(`🐛 Error in preview: ${errorMsg.substring(0, 100)}`, 'error');
+        sendDebugRequest(errorMsg);
+      }
+    };
+    window.addEventListener('message', handleIframeErrors);
+    return () => window.removeEventListener('message', handleIframeErrors);
+  }, [files]);
+
+  const sendDebugRequest = async (errorMsg) => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/debug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, error: errorMsg, files })
+      });
+      const data = await res.json();
+      if (data.fix && data.fix.description) {
+        setSuggestedFix(data.fix);
+        setShowFixButton(true);
+        addLog(`💡 AI suggests: ${data.fix.description}`, 'success');
+      }
+    } catch(e) { console.error('Debug API error:', e); }
+  };
+
+  const applyFix = () => {
+    if (!suggestedFix || !suggestedFix.file) return;
+    if (suggestedFix.patch && files[suggestedFix.file]) {
+      setFiles(prev => ({
+        ...prev,
+        [suggestedFix.file]: suggestedFix.patch
+      }));
+      addLog(`✅ Applied fix to ${suggestedFix.file}`, 'success');
+      setShowFixButton(false);
+      setSuggestedFix(null);
+    } else {
+      addLog('Fix could not be applied automatically', 'error');
+    }
+  };
+
+  // Flow Memory
+  const fetchSessionStatus = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/session/status/${workspaceId.current}`);
+      const data = await res.json();
+      if (data.has_goal) {
+        setSessionGoal(data);
+        setGoalProgress(data.progress * 100);
+      } else {
+        setSessionGoal(null);
+        setGoalProgress(0);
+      }
+    } catch(e) { console.error(e); }
+  };
+
+  const setGoalFromPlans = async (goalText, fileList) => {
+    try {
+      await fetch('http://127.0.0.1:8000/api/session/goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, goal: goalText, planned_files: fileList })
+      });
+      fetchSessionStatus();
+    } catch(e) {}
+  };
+
+  const markFileComplete = async (filePath) => {
+    try {
+      await fetch('http://127.0.0.1:8000/api/session/complete-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, file_path: filePath })
+      });
+      fetchSessionStatus();
+    } catch(e) {}
+  };
+
+  // Yjs collaboration
+  const initYjs = (filePath, content) => {
+    if (yBindingRef.current) yBindingRef.current.destroy();
+    if (yProviderRef.current) yProviderRef.current.disconnect();
+    if (yDocRef.current) yDocRef.current.destroy();
+    const doc = new Y.Doc();
+    yDocRef.current = doc;
+    const yText = doc.getText('monaco');
+    if (content) yText.insert(0, content);
+    const provider = new WebsocketProvider('ws://127.0.0.1:1234', `ws-${workspaceId.current}-${filePath}`, doc);
+    yProviderRef.current = provider;
+    provider.on('status', event => {
+      if (event.status === 'connected') {
+        addLog(`🤝 Collab active (${provider.awareness.getStates().size} users)`, 'success');
+        setCollaborators(provider.awareness.getStates().size);
+      }
+    });
+    provider.awareness.on('change', () => setCollaborators(provider.awareness.getStates().size));
+    const bind = () => {
+      if (editorRef.current) {
+        const model = editorRef.current.getModel();
+        if (model) {
+          yBindingRef.current = new MonacoBinding(yText, model, new Set([editorRef.current]), provider.awareness);
+        } else setTimeout(bind, 100);
+      } else setTimeout(bind, 100);
+    };
+    bind();
+  };
+
+  useEffect(() => {
+    if (files[currentFile]) initYjs(currentFile, files[currentFile]);
+    return () => {
+      if (yBindingRef.current) yBindingRef.current.destroy();
+      if (yProviderRef.current) yProviderRef.current.disconnect();
+      if (yDocRef.current) yDocRef.current.destroy();
+    };
+  }, [currentFile, files]);
+
+  // Templates
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/templates');
+      if (res.ok) {
+        const data = await res.json();
+        const templateList = Object.entries(data).map(([id, info]) => ({ id, ...info, files: FALLBACK_TEMPLATES.find(t => t.id === id)?.files || {} }));
+        if (templateList.length) setTemplates(templateList);
+        addLog(`✅ Loaded ${templateList.length} templates`, 'success');
+      }
+    } catch (err) {
+      addLog('Using fallback templates', 'warning');
+    }
+  };
+
+  const applyTemplate = (templateId) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+    addLog(`Applying ${template.name} template...`, 'info');
+    setFiles(template.files);
+    addLog(`✅ Template applied: ${Object.keys(template.files).length} files`, 'success');
+  };
+
+  // WebSocket connection
+  const connect = () => {
+    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/${workspaceId.current}`);
+    socket.onopen = () => {
+      setConnected(true);
+      reconnectAttempts.current = 0;
+      addLog('Connected to backend', 'success');
+      fetchBranches();
+      fetchSessionStatus();
+    };
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleMessage(data);
+      } catch(e) { addLog('Invalid message', 'error'); }
+    };
+    socket.onclose = () => {
+      setConnected(false);
+      addLog('Disconnected', 'error');
+      setTimeout(() => {
+        if (reconnectAttempts.current < 10) {
+          reconnectAttempts.current++;
+          addLog(`Reconnecting (${reconnectAttempts.current}/10)...`, 'info');
+          connect();
+        } else {
+          addLog('Max reconnects reached. Click Reconnect button.', 'error');
+        }
+      }, 3000);
+    };
+    socket.onerror = (err) => {
+      addLog(`WebSocket error: ${err.message}`, 'error');
+    };
+    setWs(socket);
+  };
+
+  const manualReconnect = () => {
+    if (ws) ws.close();
+    reconnectAttempts.current = 0;
+    addLog('Manual reconnect...', 'info');
+    connect();
+  };
+
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/branches/${workspaceId.current}`);
+      const data = await res.json();
+      setBranches(data.branches);
+    } catch(e) {}
+  };
+
+  const switchBranch = async (branch) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/switch-branch/${workspaceId.current}?branch_name=${branch}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`Switched to '${branch}'`, 'success');
+        setCurrentBranch(branch);
+        setFiles(data.files);
+      } else addLog(`Switch failed: ${data.detail}`, 'error');
+    } catch(e) { addLog(`Error: ${e.message}`, 'error'); }
+  };
+
+  const handleCommit = async () => {
+    if (Object.keys(files).length === 0) {
+      addLog('No files to commit', 'error');
+      return;
+    }
+    try {
+      addLog('Committing...', 'info');
+      const res = await fetch('http://127.0.0.1:8000/api/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, message: prompt.slice(0, 50) || 'VibeCoder generation' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`✅ Committed ${data.files} files (${data.commit})`, 'success');
+        fetchBranches();
+      } else addLog(`Commit failed: ${data.detail}`, 'error');
+    } catch(e) { addLog(`Commit error: ${e.message}`, 'error'); }
+  };
+
+  const handleDeploy = async () => {
+    if (Object.keys(files).length === 0) {
+      addLog('No files to deploy', 'error');
+      return;
+    }
+    setDeploying(true);
+    addLog('Deploying to Vercel...', 'info');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/deploy-vercel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, vercel_token: '' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`✅ Deployed: ${data.url}`, 'success');
+        window.open(data.url, '_blank');
+      } else addLog(`Deploy failed: ${data.detail}`, 'error');
+    } catch(e) { addLog(`Deploy error: ${e.message}`, 'error'); }
+    finally { setDeploying(false); }
+  };
+
+  const handleExport = async () => {
+    if (Object.keys(files).length === 0) {
+      addLog('No files to export', 'error');
+      return;
+    }
+    try {
+      addLog('Exporting ZIP...', 'info');
+      const res = await fetch(`http://127.0.0.1:8000/api/export/${workspaceId.current}`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vibecoder-${workspaceId.current}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addLog('✅ Exported', 'success');
+    } catch(e) { addLog(`Export error: ${e.message}`, 'error'); }
+  };
+
+  const saveLLMConfig = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/llm/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, provider: llmProvider, api_key: llmApiKey, model: llmModel })
+      });
+      if (res.ok) addLog(`LLM set to ${llmProvider} (${llmModel})`, 'success');
+      else addLog('Failed to set LLM', 'error');
+      setShowSettings(false);
+    } catch(e) { addLog(`Error: ${e.message}`, 'error'); }
+  };
+
+  useEffect(() => {
+    connect();
+    fetchTemplates();
+    return () => ws?.close();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'preview') setPreviewKey(prev => prev + 1);
+  }, [files, activeTab]);
+
+  const handleMessage = (data) => {
+    switch (data.type) {
+      case 'log': addLog(data.message, 'info'); break;
+      case 'plans': 
+        setPlans(data.plans);
+        addLog(`Received ${data.plans.length} plans`, 'success');
+        if (data.plans && data.plans.length > 0 && data.plans[0].file_list) {
+          setGoalFromPlans(prompt, data.plans[0].file_list);
+        }
+        break;
+      case 'file': 
+        setFiles(prev => ({ ...prev, [data.path]: data.content }));
+        markFileComplete(data.path);
+        addLog(`File: ${data.path}`, 'success');
+        break;
+      case 'file_chunk': 
+        setFiles(prev => ({ ...prev, [data.path]: (prev[data.path] || '') + data.chunk }));
+        break;
+      case 'done': 
+        addLog(data.message, 'success'); 
+        setGenerating(false); 
+        setPlans(null);
+        fetchSessionStatus();
+        break;
+      case 'error': 
+        addLog(`Error: ${data.message}`, 'error'); 
+        setGenerating(false); 
+        setPlans(null);
+        break;
+      default: console.log(data);
+    }
+  };
+
+  const sendMessage = (type, payload = {}) => {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, ...payload }));
+    else addLog('Not connected', 'error');
+  };
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) { addLog('Enter a prompt', 'error'); return; }
+    if (!connected) { addLog('Not connected', 'error'); return; }
+    try {
+      const loopRes = await fetch('http://127.0.0.1:8000/api/detect-loop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, prompt })
+      });
+      const loopData = await loopRes.json();
+      if (loopData.loop_detected) {
+        addLog(`⚠️ ${loopData.message}`, 'warning');
+        return;
+      }
+    } catch(e) { /* ignore */ }
+    setGenerating(true); setPlans(null); setFiles({});
+    addLog(`Generating: ${prompt}`, 'info');
+    sendMessage('generate', { prompt });
+  };
+
+  const selectPlan = (idx) => {
+    sendMessage('select_plan', { plan_index: idx });
+    addLog(`Plan ${idx+1} selected`, 'info');
+    setPlans(null);
+  };
+
+  const getPreviewHtml = () => {
+    const html = files['index.html'] || '<html><body><h1>No index.html</h1></body></html>';
+    const css = files['style.css'] || '';
+    const js = files['script.js'] || '';
+    let preview = html;
+    if (css && !html.includes('<style')) preview = preview.replace('</head>', `<style>${css}</style></head>`);
+    if (js && !html.includes('<script')) preview = preview.replace('</body>', `<script>${js}</script></body>`);
+    return preview;
+  };
+
+  const registerInlineCompletions = (monaco, editor) => {
+    if (window._inlineCompletionDisposable) window._inlineCompletionDisposable.dispose();
+    const provider = {
+      provideInlineCompletions: async (model, position) => {
+        const word = model.getWordUntilPosition(position);
+        if (word.word.length < 2) return { items: [] };
+        const content = model.getValue();
+        const offset = model.getOffsetAt(position);
+        try {
+          const res = await fetch('http://127.0.0.1:8000/api/suggest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_path: currentFile, content, cursor_position: offset, language: model.getLanguageId() })
+          });
+          const data = await res.json();
+          if (data.suggestion && data.suggestion.length > 0) {
+            return {
+              items: [{
+                insertText: data.suggestion,
+                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+              }]
+            };
+          }
+        } catch(e) { console.error(e); }
+        return { items: [] };
+      },
+      freeInlineCompletions: () => {}
+    };
+    window._inlineCompletionDisposable = monaco.languages.registerInlineCompletionsProvider('*', provider);
+  };
+
+  const runSilentFix = async (currentFiles) => {
+    if (!silentMode) return;
+    if (Object.keys(currentFiles).length === 0) return;
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/silent-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentFiles)
+      });
+      const data = await res.json();
+      if (data.fixes && Object.keys(data.fixes).length > 0) {
+        setFiles(prev => {
+          const newFiles = { ...prev };
+          let changed = false;
+          for (const [path, fixedContent] of Object.entries(data.fixes)) {
+            if (newFiles[path] !== fixedContent) {
+              newFiles[path] = fixedContent;
+              changed = true;
+            }
+          }
+          if (changed) addLog('🔧 Silent Mode applied improvements', 'info');
+          return newFiles;
+        });
+      }
+    } catch(e) { console.error('Silent fix error:', e); }
+  };
+
+  useEffect(() => {
+    if (silentTimeout.current) clearTimeout(silentTimeout.current);
+    silentTimeout.current = setTimeout(() => runSilentFix(files), 2000);
+    return () => clearTimeout(silentTimeout.current);
+  }, [files, silentMode]);
+
+  const reportFrustrationEvent = async (eventType) => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/frustration/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, event_type: eventType })
+      });
+      const data = await res.json();
+      if (data.offer_help && data.message) {
+        setFrustrationHelp({ message: data.message, timestamp: Date.now() });
+        setTimeout(() => setFrustrationHelp(null), 8000);
+      }
+    } catch(e) { console.error(e); }
+  };
+
+  const checkForFailures = async () => {
+    if (Object.keys(files).length === 0) { addLog('No files to analyze', 'error'); return; }
+    addLog('🔍 Analyzing code for potential failures...', 'info');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/predict-failures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(files)
+      });
+      const data = await res.json();
+      if (data.warnings && data.warnings.length > 0) {
+        setFailureWarnings(data.warnings);
+        setShowWarnings(true);
+        addLog(`⚠️ Found ${data.warnings.length} potential issues.`, 'warning');
+      } else {
+        setFailureWarnings([]);
+        setShowWarnings(false);
+        addLog('✅ No obvious failures predicted.', 'success');
+      }
+    } catch(e) { addLog(`Failure analysis error: ${e.message}`, 'error'); }
+  };
+
+  const fetchFixOptions = async (errorMsg, filesSnapshot) => {
+    setCurrentError(errorMsg);
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/optimize-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: errorMsg, files: filesSnapshot })
+      });
+      const data = await res.json();
+      setFixOptions(data);
+      setShowFixOptions(true);
+      addLog('⏱️ Fix options generated. Choose a strategy.', 'info');
+    } catch(e) { addLog(`Optimizer error: ${e.message}`, 'error'); }
+  };
+
+  const runTests = async () => {
+    if (Object.keys(files).length === 0) { addLog('No files to test', 'error'); return; }
+    addLog('🧪 Generating and running unit tests...', 'info');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/generate-tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, files })
+      });
+      const data = await res.json();
+      let passedCount = 0, totalCount = 0;
+      for (const [file, result] of Object.entries(data)) {
+        totalCount++;
+        if (result.passed) passedCount++;
+        addLog(`${file}: ${result.passed ? '✅ PASSED' : '❌ FAILED'}`, result.passed ? 'success' : 'error');
+      }
+      addLog(`Tests: ${passedCount}/${totalCount} passed`, passedCount === totalCount ? 'success' : 'warning');
+    } catch(e) { addLog(`Test error: ${e.message}`, 'error'); }
+  };
+
+  const autoFixFile = async (filePath, code, testOutput) => {
+    addLog(`🔧 Attempting to auto-fix ${filePath}...`, 'info');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/auto-fix-with-tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, file_path: filePath, code, test_output: testOutput })
+      });
+      const data = await res.json();
+      if (data.fixed_code) {
+        setFiles(prev => ({ ...prev, [filePath]: data.fixed_code }));
+        addLog(`✅ Fixed ${filePath}. Re-run tests to verify.`, 'success');
+      } else {
+        addLog(`Auto-fix failed: ${data.error}`, 'error');
+      }
+    } catch(e) { addLog(`Auto-fix error: ${e.message}`, 'error'); }
+  };
+
+  // Command palette hotkey
+  useHotkeys('ctrl+p', (e) => {
+    e.preventDefault();
+    setShowCommandPalette(true);
+  });
+
+  const commands = [
+    { name: 'Generate new app', action: () => handleGenerate() },
+    { name: 'Run tests', action: () => runTests() },
+    { name: 'Check for failures', action: () => checkForFailures() },
+    { name: 'Toggle silent mode', action: () => setSilentMode(!silentMode) },
+    { name: 'Commit changes', action: () => handleCommit() },
+    { name: 'Export ZIP', action: () => handleExport() },
+    { name: 'Deploy to Vercel', action: () => handleDeploy() },
+    { name: 'Switch to Editor', action: () => setActiveTab('editor') },
+    { name: 'Switch to Preview', action: () => setActiveTab('preview') },
+    { name: 'Open Settings', action: () => setShowSettings(true) },
+    { name: 'Reconnect backend', action: () => manualReconnect() },
+  ];
+
+  const filteredCommands = commands.filter(cmd => cmd.name.toLowerCase().includes(commandQuery.toLowerCase()));
+
+  const copyToClipboard = (content) => {
+    navigator.clipboard.writeText(content);
+    addLog('Copied to clipboard', 'success');
+  };
+
+  const collectTrainingData = async () => {
+    if (Object.keys(files).length === 0) { addLog('No files to collect', 'error'); return; }
+    let count = 0;
+    for (const [filePath, content] of Object.entries(files)) {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/collect-training-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace_id: workspaceId.current, instruction: prompt + " " + filePath, output: content })
+        });
+        if (res.ok) count++;
+      } catch(e) { console.error(e); }
+    }
+    addLog(`Collected ${count} files for training`, 'success');
+  };
+
+  const startFineTune = async () => {
+    addLog('Starting fine‑tuning (may take several minutes)...', 'info');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/fine-tune', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, steps: 50 })
+      });
+      const data = await res.json();
+      if (res.ok) addLog('Fine‑tuning started in background. Check backend logs.', 'success');
+      else addLog(`Fine‑tune failed: ${data.error}`, 'error');
+    } catch(e) { addLog(`Error: ${e.message}`, 'error'); }
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-900 text-gray-100 overflow-hidden">
+      {/* Command Palette */}
+      <AnimatePresence>
+        {showCommandPalette && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 flex items-start justify-center pt-20 z-50"
+            onClick={() => setShowCommandPalette(false)}
+          >
+            <motion.div
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -20, opacity: 0 }}
+              className="bg-gray-800 rounded-xl shadow-2xl w-96 max-w-full overflow-hidden border border-gray-700"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-3 border-b border-gray-700">
+                <input
+                  type="text"
+                  placeholder="Type a command..."
+                  value={commandQuery}
+                  onChange={(e) => setCommandQuery(e.target.value)}
+                  autoFocus
+                  className="w-full bg-gray-700 rounded-md px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+              <div className="max-h-80 overflow-auto">
+                {filteredCommands.map((cmd) => (
+                  <button
+                    key={cmd.name}
+                    onClick={() => { cmd.action(); setShowCommandPalette(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <Zap className="w-3 h-3 text-gray-400" />
+                    {cmd.name}
+                  </button>
+                ))}
+                {filteredCommands.length === 0 && (
+                  <div className="px-3 py-4 text-sm text-gray-400 text-center">No matching commands</div>
+                )}
+              </div>
+              <div className="p-2 border-t border-gray-700 text-xs text-gray-400 flex justify-between">
+                <span>Press <kbd className="px-1 bg-gray-700 rounded">Ctrl+P</kbd> to open</span>
+                <span>Press <kbd className="px-1 bg-gray-700 rounded">Esc</kbd> to close</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast notifications */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-20 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm flex items-center gap-2"
+            style={{ backgroundColor: toast.type === 'error' ? '#ef4444' : toast.type === 'success' ? '#10b981' : '#3b82f6' }}
+          >
+            {toast.type === 'success' && <Check className="w-4 h-4" />}
+            {toast.type === 'error' && <AlertCircle className="w-4 h-4" />}
+            {toast.type === 'info' && <MessageSquare className="w-4 h-4" />}
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <header className="bg-gray-800/90 backdrop-blur-sm border-b border-gray-700 px-4 py-2 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-1 hover:bg-gray-700 rounded-md">
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-400" />
+            <h1 className="text-lg font-semibold tracking-tight">VibeCoder</h1>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className={`px-2 py-0.5 rounded-full ${connected ? 'bg-green-600' : 'bg-red-600'} flex items-center gap-1`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-300' : 'bg-red-300'} animate-pulse`} />
+              {connected ? 'Connected' : 'Disconnected'}
+            </span>
+            {collaborators > 1 && (
+              <span className="bg-blue-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Users className="w-3 h-3" /> {collaborators}
+              </span>
+            )}
+            {currentBranch !== 'main' && (
+              <span className="bg-gray-700 px-2 py-0.5 rounded-full font-mono text-xs">
+                🌿 {currentBranch}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setShowCommandPalette(true)} className="bg-gray-700 hover:bg-gray-600 p-1.5 rounded-md" title="Command Palette (Ctrl+P)">
+            <Zap className="w-4 h-4" />
+          </button>
+          <button onClick={() => setShowSettings(true)} className="bg-gray-700 hover:bg-gray-600 p-1.5 rounded-md">
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* Session Goal Progress Bar */}
+      {sessionGoal && (
+        <div className="bg-gray-800/50 border-b border-gray-700 px-4 py-2 text-sm">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-green-400" />
+              <span className="font-medium truncate">{sessionGoal.goal.substring(0, 80)}</span>
+            </div>
+            <span className="text-xs text-gray-400">{Math.round(goalProgress)}%</span>
+          </div>
+          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${goalProgress}%` }} />
+          </div>
+          <div className="flex gap-3 mt-1 text-xs text-gray-400 overflow-x-auto">
+            {sessionGoal.planned_files?.map(file => (
+              <div key={file} className="flex items-center gap-1 whitespace-nowrap">
+                {sessionGoal.completed_files.includes(file) ? <CheckCircle className="w-3 h-3 text-green-400" /> : <Circle className="w-3 h-3" />}
+                {file}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Failure Warnings Panel */}
+      {showWarnings && failureWarnings.length > 0 && (
+        <div className="bg-yellow-900/30 border-b border-yellow-600 px-4 py-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-yellow-400">
+              <AlertCircle className="w-4 h-4" />
+              <span className="font-medium">{failureWarnings.length} potential issues found</span>
+            </div>
+            <button onClick={() => setShowWarnings(false)} className="text-gray-400 hover:text-gray-200">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+            {failureWarnings.slice(0, 3).map((w, i) => (
+              <div key={i} className="text-xs text-gray-300">
+                <span className="font-mono">{w.file}</span>: {w.message}
+              </div>
+            ))}
+            {failureWarnings.length > 3 && <div className="text-xs text-gray-400">+{failureWarnings.length - 3} more</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Main area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar */}
+        <motion.div
+          initial={false}
+          animate={{ width: sidebarCollapsed ? 48 : 260 }}
+          className="bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden flex-shrink-0 transition-all duration-300"
+        >
+          <div className="p-2 border-b border-gray-700 flex items-center justify-between">
+            {!sidebarCollapsed && <span className="text-sm font-medium">📁 Explorer</span>}
+            <div className="flex gap-1 ml-auto">
+              {!sidebarCollapsed && (
+                <>
+                  <button onClick={collectTrainingData} className="p-1 hover:bg-gray-700 rounded" title="Collect training data">
+                    <Upload className="w-4 h-4" />
+                  </button>
+                  <button onClick={startFineTune} className="p-1 hover:bg-gray-700 rounded" title="Fine‑tune AI">
+                    <Sparkles className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-1 hover:bg-gray-700 rounded">
+                {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          {!sidebarCollapsed && (
+            <div className="flex-1 overflow-auto p-2">
+              {Object.keys(files).length === 0 ? (
+                <div className="text-gray-500 text-sm text-center py-8">No files yet.<br />Generate something!</div>
+              ) : (
+                <ul className="space-y-0.5">
+                  {Object.keys(files).map(file => (
+                    <li key={file}>
+                      <div
+                        className={`flex items-center justify-between px-2 py-1 rounded-md cursor-pointer hover:bg-gray-700 ${currentFile === file ? 'bg-gray-700' : ''}`}
+                        onClick={() => setCurrentFile(file)}
+                      >
+                        <div className="flex items-center gap-2 text-sm">
+                          <FileCode className="w-4 h-4 text-blue-400" />
+                          <span className="truncate">{file}</span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); copyToClipboard(files[file]); }}
+                          className="opacity-0 hover:opacity-100 transition-opacity"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Main content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Tab bar */}
+          <div className="bg-gray-800 border-b border-gray-700 px-2 flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab('editor')}
+              className={`px-3 py-1.5 text-sm rounded-t-md transition-colors ${activeTab === 'editor' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              <FileCode className="w-4 h-4 inline mr-1" /> Editor
+            </button>
+            <button
+              onClick={() => setActiveTab('preview')}
+              className={`px-3 py-1.5 text-sm rounded-t-md transition-colors ${activeTab === 'preview' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              <Eye className="w-4 h-4 inline mr-1" /> Preview
+            </button>
+            {showFixButton && (
+              <button onClick={applyFix} className="ml-auto bg-orange-600 hover:bg-orange-700 px-2 py-1 rounded text-xs flex items-center gap-1">
+                <Wrench className="w-3 h-3" /> Instant Fix
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 relative">
+            {plans && (
+              <div className="absolute top-2 left-2 right-2 z-10 bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-700">
+                <div className="text-sm font-medium mb-2">Choose implementation plan:</div>
+                <div className="flex gap-3">
+                  {plans.map((plan, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => selectPlan(idx)}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 p-3 rounded-md text-left transition-all hover:scale-105"
+                    >
+                      <div className="font-semibold">{plan.name}</div>
+                      <div className="text-xs text-gray-400 mt-1">{plan.description}</div>
+                      <div className="text-xs text-purple-400 mt-1">⏱️ ~{plan.estimated_time}h</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {activeTab === 'editor' ? (
+              <Editor
+                height="100%"
+                language={currentFile.endsWith('.html') ? 'html' : currentFile.endsWith('.css') ? 'css' : 'javascript'}
+                theme="vs-dark"
+                onMount={(editor, monaco) => {
+                  editorRef.current = editor;
+                  registerInlineCompletions(monaco, editor);
+                  editor.onDidChangeModelContent(() => {
+                    const model = editor.getModel();
+                    if (model) {
+                      const pos = editor.getPosition();
+                      const content = model.getValue();
+                      const offset = model.getOffsetAt(pos);
+                      clearTimeout(suggestionTimeout.current);
+                      suggestionTimeout.current = setTimeout(() => fetchSuggestion(content, offset, model.getLanguageId()), 500);
+                    }
+                  });
+                }}
+                options={{ minimap: { enabled: false }, fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}
+              />
+            ) : (
+              <div className="w-full h-full bg-white">
+                <iframe
+                  ref={iframeRef}
+                  key={previewKey}
+                  title="Preview"
+                  srcDoc={getPreviewHtml()}
+                  className="w-full h-full border-0"
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Logs panel */}
+        <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col overflow-hidden flex-shrink-0">
+          <div className="p-2 border-b border-gray-700 flex items-center justify-between">
+            <span className="text-sm font-medium">📋 Output</span>
+            <button onClick={() => setLogs([])} className="text-xs text-gray-400 hover:text-white">Clear</button>
+          </div>
+          <div className="flex-1 overflow-auto p-2 space-y-1 font-mono text-xs">
+            {logs.map((log, i) => (
+              <div key={i} className={`${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : 'text-gray-300'} break-words`}>
+                <span className="text-gray-500">[{log.timestamp}]</span> {log.message}
+              </div>
+            ))}
+            {logs.length === 0 && <div className="text-gray-500 text-center py-8">No logs yet.</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Prompt bar */}
+      <div className="bg-gray-800 border-t border-gray-700 p-2 flex items-center gap-2 flex-shrink-0">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={prompt}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              clearTimeout(suggestionTimeout.current);
+              suggestionTimeout.current = setTimeout(() => fetchSuggestion(e.target.value), 500);
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+            placeholder="Describe your app... (e.g., 'Create a to‑do list with local storage')"
+            className="w-full bg-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+            disabled={generating}
+          />
+          {showSuggestion && suggestion && (
+            <div className="absolute left-3 -top-8 bg-gray-700 text-green-400 text-xs px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
+              💡 {suggestion}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={startListening}
+          disabled={isListening || generating}
+          className={`p-2 rounded-md transition-colors ${isListening ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}
+          title="Voice input"
+        >
+          <Mic className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+        >
+          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+          {generating ? 'Generating...' : 'Generate'}
+        </button>
+      </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setShowSettings(false)}>
+          <div className="bg-gray-800 rounded-lg shadow-xl w-96 max-w-full p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">LLM Settings</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Provider</label>
+                <select value={llmProvider} onChange={(e) => setLlmProvider(e.target.value)} className="w-full bg-gray-700 rounded px-3 py-2 text-sm">
+                  <option value="ollama">Ollama (local)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic Claude</option>
+                  <option value="groq">Groq</option>
+                </select>
+              </div>
+              {llmProvider !== 'ollama' && (
+                <div>
+                  <label className="block text-sm mb-1">API Key</label>
+                  <input type="password" value={llmApiKey} onChange={(e) => setLlmApiKey(e.target.value)} className="w-full bg-gray-700 rounded px-3 py-2 text-sm" />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm mb-1">Model</label>
+                <input type="text" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="e.g., mistral, mixtral:8x7b, gpt-4" className="w-full bg-gray-700 rounded px-3 py-2 text-sm" />
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={useGlobalMemory} onChange={(e) => setUseGlobalMemory(e.target.checked)} id="globalMemory" />
+                <label htmlFor="globalMemory" className="text-sm">Use cross‑project memory (global AI learning)</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={silentMode} onChange={(e) => setSilentMode(e.target.checked)} id="silentMode" />
+                <label htmlFor="silentMode" className="text-sm">Silent Mode (auto‑improve code)</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowSettings(false)} className="px-3 py-1.5 bg-gray-700 rounded text-sm">Cancel</button>
+              <button onClick={saveLLMConfig} className="px-3 py-1.5 bg-purple-600 rounded text-sm">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Frustration Help Toast */}
+      {frustrationHelp && (
+        <div className="fixed bottom-20 right-4 bg-yellow-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm flex items-center gap-2 animate-in slide-in-from-bottom-5">
+          <AlertCircle className="w-4 h-4" />
+          {frustrationHelp.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;

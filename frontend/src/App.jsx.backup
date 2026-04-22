@@ -1,0 +1,24 @@
+﻿import React, { useState, useEffect } from 'react';
+
+function App() {
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const ws = new WebSocket('ws://127.0.0.1:8000/ws/123');
+    ws.onopen = () => setConnected(true);
+    ws.onclose = () => setConnected(false);
+    return () => ws.close();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="bg-gray-800 p-8 rounded-xl shadow-2xl">
+        <h1 className="text-3xl font-bold text-purple-400 mb-4">VibeCoder</h1>
+        <p className="text-lg">Backend: {connected ? '✅ Connected' : '❌ Disconnected'}</p>
+        <p className="text-sm text-gray-400 mt-4">If you see this with a dark background and purple heading, Tailwind is working.</p>
+      </div>
+    </div>
+  );
+}
+
+export default App;

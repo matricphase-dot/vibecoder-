@@ -1,0 +1,25 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar – Antigravity style */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #161B22;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363D;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #58A6FF;
+}
+/* Ghost text suggestion indicator */
+.monaco-editor .ghost-text {
+  color: #6a737d;
+  font-style: italic;
+  opacity: 0.7;
+}

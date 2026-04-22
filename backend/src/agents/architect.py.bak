@@ -1,0 +1,22 @@
+﻿import ollama
+import json
+import re
+
+class Architect:
+    async def analyze(self, prompt: str):
+        system = "You extract software requirements as JSON. Output only valid JSON."
+        user = f"""Analyze: "{prompt}"
+Return JSON with:
+{{"summary": "short description", "core_features": ["feature1", "feature2"], "constraints": [], "stack": ["html", "css", "js"]}}"""
+        try:
+            response = ollama.chat(model="mistral", messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ])
+            content = response['message']['content']
+            match = re.search(r'\{.*\}', content, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+        except Exception as e:
+            print(f"Architect error: {e}")
+        return {"summary": prompt, "core_features": ["counter"], "constraints": [], "stack": ["html", "css", "js"]}

@@ -1,0 +1,57 @@
+﻿import json
+import ollama
+import asyncio
+import re
+from src.memory.chroma_manager import ChromaMemory
+from src.memory.global_memory import GlobalMemory
+
+class Coder:
+    def __init__(self, model="mistral"):
+        self.model = model
+
+    async def generate(self, plan, requirements, memory, websocket):
+        files = []
+        for file_path in plan['file_list']:
+            await websocket.send_text(json.dumps({"type": "log", "message": f"🧠 Writing {file_path}..."}))
+            similar = memory.search(file_path, n_results=1)
+            context = similar[0]['content'] if similar else ""
+
+            system = """You are an elite full-stack developer. Write complete, production-ready code.
+            - Use vanilla HTML/CSS/JS unless React/Vue is specified.
+            - For complex apps (chat, weather, dashboard, full-stack), include necessary APIs and error handling.
+            - If the user asks for a MERN stack, generate server.js with Express, MongoDB connection, and REST API.
+            - Include comments, responsive design, and modern ES6 features.
+            - Return ONLY the file content, no markdown or explanations.
+            - The code must be self-contained and run without external dependencies (except CDNs if needed)."""
+
+            user = f"""Requirements: {requirements['summary']}
+Plan: {plan['name']} - {plan['description']}
+File: {file_path}
+Similar existing code: {context[:500]}
+
+Write the full content of {file_path}. Make it interactive, professional, and complete. If the requirements ask for a full-stack app, generate both frontend and backend files accordingly."""
+
+            try:
+                stream = ollama.chat(model=self.model, messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user}
+                ], stream=True)
+                content = ""
+                for chunk in stream:
+                    if 'message' in chunk and 'content' in chunk['message']:
+                        part = chunk['message']['content']
+                        content += part
+                        await websocket.send_text(json.dumps({"type": "file_chunk", "path": file_path, "chunk": part}))
+                        await asyncio.sleep(0.01)
+                content = re.sub(r'```\w*\n?', '', content).strip()
+                if not content:
+                    content = f"// Fallback for {file_path}\nconsole.log('Generated {file_path}');"
+                files.append({"path": file_path, "content": content})
+                memory.add_file(file_path, content)
+                await websocket.send_text(json.dumps({"type": "log", "message": f"✅ {file_path} ({len(content)} chars)"}))
+            except Exception as e:
+                await websocket.send_text(json.dumps({"type": "error", "message": f"Error on {file_path}: {str(e)}"}))
+                files.append({"path": file_path, "content": f"// Error: {str(e)}"})
+        return files
+
+

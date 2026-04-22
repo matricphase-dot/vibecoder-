@@ -1,0 +1,96 @@
+﻿import asyncio
+import json
+import os
+import zipfile
+from pathlib import Path
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+import httpx
+
+# Import the real orchestrator (exists on disk)
+from src.generation import GenerationOrchestrator
+
+app = FastAPI(title="VibeCoder - Full AI Backend")
+
+# CORS - allow frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize the real orchestrator (uses agents, ChromaDB, Ollama)
+orchestrator = GenerationOrchestrator()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("✅ WebSocket connected - Full AI mode active")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+            if msg.get("type") == "generate":
+                prompt = msg.get("prompt", "")
+                plan = msg.get("plan", "fast")
+                template = msg.get("template", "vanilla")
+                print(f"🎯 Generating: {prompt} (plan={plan}, template={template})")
+                # Stream events from the real orchestrator
+                async for event in orchestrator.generate(prompt, plan, template):
+                    await websocket.send_text(json.dumps(event))
+            else:
+                await websocket.send_text(json.dumps({"type": "log", "message": f"Unknown type: {msg.get('type')}"}))
+    except WebSocketDisconnect:
+        print("❌ WebSocket disconnected")
+    except Exception as e:
+        print(f"⚠️ WebSocket error: {e}")
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "mode": "full", "agents": "active"}
+
+@app.get("/api/templates")
+async def get_templates():
+    return {
+        "templates": ["vanilla", "react", "vue", "svelte"],
+        "default": "vanilla"
+    }
+
+@app.post("/api/deploy/vercel")
+async def deploy_to_vercel():
+    # Placeholder - implement actual Vercel deployment if needed
+    return {"message": "Deployment endpoint ready - integrate Vercel CLI"}
+
+@app.get("/api/export/zip")
+async def export_zip():
+    zip_path = Path("workspace.zip")
+    workspace = Path("workspace")
+    if workspace.exists():
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for file in workspace.rglob("*"):
+                if file.is_file():
+                    zipf.write(file, file.relative_to(workspace))
+    return FileResponse(zip_path, filename="vibecoder-workspace.zip")
+
+# Additional Git endpoints (if GitPython is installed)
+try:
+    import git
+    from fastapi import HTTPException
+
+    @app.get("/api/git/branches")
+    async def get_branches():
+        repo = git.Repo(".")
+        branches = [str(b) for b in repo.branches]
+        return {"branches": branches, "current": str(repo.active_branch)}
+
+    @app.post("/api/git/commit")
+    async def commit(message: str):
+        repo = git.Repo(".")
+        repo.index.add("*")
+        repo.index.commit(message)
+        return {"message": f"Committed: {message}"}
+except ImportError:
+    print("⚠️ GitPython not installed - Git endpoints disabled")

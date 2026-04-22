@@ -1,0 +1,28 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+    <script>
+        const ws = new WebSocket('ws://localhost:8000/ws/123');
+        ws.onopen = () => {
+            document.getElementById('status').innerHTML = 'Connected ✅';
+            ws.send(JSON.stringify({type: 'ping'}));
+        };
+        ws.onmessage = (e) => {
+            document.getElementById('messages').innerHTML += `<p>Received: ${e.data}</p>`;
+        };
+        ws.onerror = (e) => {
+            document.getElementById('status').innerHTML = 'Error ❌';
+            console.error(e);
+        };
+        ws.onclose = () => {
+            document.getElementById('status').innerHTML = 'Disconnected';
+        };
+    </script>
+</body>
+</html>

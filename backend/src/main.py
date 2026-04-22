@@ -1,0 +1,763 @@
+﻿# src/main.py – Full backend with WebSocket
+import asyncio
+import json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from src.generation import GenerationOrchestrator
+
+app = FastAPI(title="VibeCoder AI Backend")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+orchestrator = GenerationOrchestrator()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("✅ WebSocket connected")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+            if msg.get("type") == "generate":
+                prompt = msg.get("prompt", "")
+                plan = msg.get("plan", "fast")
+                template = msg.get("template", "vanilla")
+                print(f"🎯 Generating: {prompt}")
+                async for event in orchestrator.generate(prompt, plan, template):
+                    await websocket.send_text(json.dumps(event))
+            else:
+                await websocket.send_text(json.dumps({"type": "log", "message": "Unknown command"}))
+    except WebSocketDisconnect:
+        print("❌ WebSocket disconnected")
+    except Exception as e:
+        print(f"Error: {e}")
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "mode": "full-ai"}
+
+# ========== TERMINAL WEBSOCKET ==========
+import subprocess
+import platform
+import os
+
+@app.websocket("/terminal")
+async def terminal_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("🔌 Terminal client connected")
+    # Set working directory to workspace
+    workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+    os.makedirs(workspace_dir, exist_ok=True)
+    os.chdir(workspace_dir)
+    try:
+        while True:
+            command = await websocket.receive_text()
+            print(f"📟 Terminal command: {command}")
+            try:
+                shell = platform.system() == "Windows"
+                process = await asyncio.create_subprocess_shell(
+                    command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    shell=shell,
+                    cwd=workspace_dir
+                )
+                stdout, stderr = await process.communicate()
+                output = stdout.decode('utf-8', errors='replace')
+                if stderr:
+                    output += "\n" + stderr.decode('utf-8', errors='replace')
+                await websocket.send_text(output if output else "(no output)")
+            except Exception as e:
+                await websocket.send_text(f"Error: {str(e)}")
+    except Exception as e:
+        print(f"Terminal error: {e}")
+
+# ========== GIT INTEGRATION ==========
+import git
+import os
+from fastapi import HTTPException, Body
+
+# Ensure we're in a git repo (or initialize one)
+workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+if not os.path.exists(os.path.join(workspace_dir, ".git")):
+    try:
+        repo = git.Repo.init(workspace_dir)
+        print("✅ Git repository initialized in workspace")
+    except Exception as e:
+        print(f"⚠️ Git init failed: {e}")
+
+@app.get("/api/git/status")
+async def git_status():
+    try:
+        repo = git.Repo(workspace_dir)
+        changed = [item.a_path for item in repo.index.diff(None)]
+        untracked = repo.untracked_files
+        return {"changed": changed, "untracked": untracked}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/git/commit")
+async def git_commit(message: str = Body(..., embed=True)):
+    try:
+        repo = git.Repo(workspace_dir)
+        repo.index.add("*")
+        commit = repo.index.commit(message)
+        return {"commit": str(commit), "message": message}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/git/branches")
+async def git_branches():
+    try:
+        repo = git.Repo(workspace_dir)
+        branches = [str(b) for b in repo.branches]
+        current = str(repo.active_branch)
+        return {"branches": branches, "current": current}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/git/checkout")
+async def git_checkout(branch: str = Body(..., embed=True)):
+    try:
+        repo = git.Repo(workspace_dir)
+        repo.git.checkout(branch)
+        return {"branch": branch}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========== DEPLOY TO VERCEL ==========
+import subprocess
+import json
+import tempfile
+import shutil
+
+@app.post("/api/deploy/vercel")
+async def deploy_to_vercel():
+    try:
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        # Create a temporary vercel.json if not exists
+        vercel_json = os.path.join(workspace_dir, "vercel.json")
+        if not os.path.exists(vercel_json):
+            with open(vercel_json, "w") as f:
+                json.dump({
+                    "version": 2,
+                    "builds": [{"src": "**/*.html", "use": "@vercel/static"}],
+                    "routes": [{"src": "/(.*)", "dest": "/$1"}]
+                }, f)
+        # Run vercel deploy command (requires Vercel CLI installed)
+        # For now, return instructions – actual deploy would need CLI and token
+        return {
+            "message": "Deployment prepared",
+            "instructions": "Run 'vercel --prod' in workspace folder after installing Vercel CLI",
+            "workspace": workspace_dir
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/deploy/status")
+async def deploy_status():
+    return {"status": "ready", "platform": "vercel"}
+
+# ========== VOICE COMMAND PARSING ==========
+from pydantic import BaseModel
+import re
+
+class VoiceCommandRequest(BaseModel):
+    text: str
+    current_file: str = None
+    selected_text: str = None
+
+@app.post("/api/voice/command")
+async def parse_voice_command(cmd: VoiceCommandRequest):
+    text = cmd.text.lower().strip()
+    selected = cmd.selected_text or ""
+    
+    # Refactor command
+    if re.search(r'\b(refactor|improve|rewrite|clean)\b', text):
+        return {"action": "refactor", "target": selected if selected else "current_function"}
+    
+    # Comment / uncomment
+    if re.search(r'\b(comment|uncomment)\b', text):
+        return {"action": "toggle_comment"}
+    
+    # Run tests
+    if re.search(r'\b(run|execute)\s+tests?\b', text):
+        return {"action": "run_tests"}
+    
+    # Deploy
+    if re.search(r'\b(deploy|publish|go live)\b', text):
+        return {"action": "deploy"}
+    
+    # Git commit
+    if re.search(r'\b(commit|save|checkpoint)\b', text):
+        return {"action": "git_commit"}
+    
+    # Branch switch
+    branch_match = re.search(r'\b(switch to|checkout)\s+(\w+)\b', text)
+    if branch_match:
+        branch = branch_match.group(2)
+        return {"action": "git_checkout", "branch": branch}
+    
+    # Open file
+    file_match = re.search(r'\b(open|show)\s+(\w+\.?\w*)\b', text)
+    if file_match:
+        filename = file_match.group(2)
+        return {"action": "open_file", "filename": filename}
+    
+    # Undo / Redo
+    if 'undo' in text:
+        return {"action": "undo"}
+    if 'redo' in text:
+        return {"action": "redo"}
+    
+    # Clear console
+    if re.search(r'\b(clear console|clear logs|clear)\b', text):
+        return {"action": "clear_console"}
+    
+    # Stop generation
+    if re.search(r'\b(stop|cancel)\s+generation\b', text):
+        return {"action": "stop_generation"}
+    
+    # Open settings
+    if re.search(r'\b(settings|preferences)\b', text):
+        return {"action": "open_settings"}
+    
+    # Help
+    if re.search(r'\b(help|commands|what can I say)\b', text):
+        return {"action": "show_help"}
+    
+    # Default – treat as generation prompt
+    return {"action": "generate", "prompt": cmd.text}
+
+# ========== DEPLOY TO VERCEL ==========
+import subprocess
+import json
+import tempfile
+import shutil
+
+@app.post("/api/deploy/vercel")
+async def deploy_to_vercel():
+    try:
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        # Create a temporary vercel.json if not exists
+        vercel_json = os.path.join(workspace_dir, "vercel.json")
+        if not os.path.exists(vercel_json):
+            with open(vercel_json, "w") as f:
+                json.dump({
+                    "version": 2,
+                    "builds": [{"src": "**/*.html", "use": "@vercel/static"}],
+                    "routes": [{"src": "/(.*)", "dest": "/$1"}]
+                }, f)
+        # Run vercel deploy command (requires Vercel CLI installed)
+        # For now, return instructions – actual deploy would need CLI and token
+        return {
+            "message": "Deployment prepared",
+            "instructions": "Run 'vercel --prod' in workspace folder after installing Vercel CLI",
+            "workspace": workspace_dir
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/deploy/status")
+async def deploy_status():
+    return {"status": "ready", "platform": "vercel"}
+
+# ========== VOICE COMMAND PARSING ==========
+from pydantic import BaseModel
+import re
+
+class VoiceCommandRequest(BaseModel):
+    text: str
+    current_file: str = None
+    selected_text: str = None
+
+@app.post("/api/voice/command")
+async def parse_voice_command(cmd: VoiceCommandRequest):
+    text = cmd.text.lower().strip()
+    selected = cmd.selected_text or ""
+    
+    # Refactor command
+    if re.search(r'\b(refactor|improve|rewrite|clean)\b', text):
+        return {"action": "refactor", "target": selected if selected else "current_function"}
+    
+    # Comment / uncomment
+    if re.search(r'\b(comment|uncomment)\b', text):
+        return {"action": "toggle_comment"}
+    
+    # Run tests
+    if re.search(r'\b(run|execute)\s+tests?\b', text):
+        return {"action": "run_tests"}
+    
+    # Deploy
+    if re.search(r'\b(deploy|publish|go live)\b', text):
+        return {"action": "deploy"}
+    
+    # Git commit
+    if re.search(r'\b(commit|save|checkpoint)\b', text):
+        return {"action": "git_commit"}
+    
+    # Branch switch
+    branch_match = re.search(r'\b(switch to|checkout)\s+(\w+)\b', text)
+    if branch_match:
+        branch = branch_match.group(2)
+        return {"action": "git_checkout", "branch": branch}
+    
+    # Open file
+    file_match = re.search(r'\b(open|show)\s+(\w+\.?\w*)\b', text)
+    if file_match:
+        filename = file_match.group(2)
+        return {"action": "open_file", "filename": filename}
+    
+    # Undo / Redo
+    if 'undo' in text:
+        return {"action": "undo"}
+    if 'redo' in text:
+        return {"action": "redo"}
+    
+    # Clear console
+    if re.search(r'\b(clear console|clear logs|clear)\b', text):
+        return {"action": "clear_console"}
+    
+    # Stop generation
+    if re.search(r'\b(stop|cancel)\s+generation\b', text):
+        return {"action": "stop_generation"}
+    
+    # Open settings
+    if re.search(r'\b(settings|preferences)\b', text):
+        return {"action": "open_settings"}
+    
+    # Help
+    if re.search(r'\b(help|commands|what can I say)\b', text):
+        return {"action": "show_help"}
+    
+    # Default – treat as generation prompt
+    return {"action": "generate", "prompt": cmd.text}
+
+# ========== DEPLOY TO VERCEL ==========
+import subprocess
+import json
+import tempfile
+import shutil
+
+@app.post("/api/deploy/vercel")
+async def deploy_to_vercel():
+    try:
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        # Create a temporary vercel.json if not exists
+        vercel_json = os.path.join(workspace_dir, "vercel.json")
+        if not os.path.exists(vercel_json):
+            with open(vercel_json, "w") as f:
+                json.dump({
+                    "version": 2,
+                    "builds": [{"src": "**/*.html", "use": "@vercel/static"}],
+                    "routes": [{"src": "/(.*)", "dest": "/$1"}]
+                }, f)
+        # Run vercel deploy command (requires Vercel CLI installed)
+        # For now, return instructions – actual deploy would need CLI and token
+        return {
+            "message": "Deployment prepared",
+            "instructions": "Run 'vercel --prod' in workspace folder after installing Vercel CLI",
+            "workspace": workspace_dir
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/deploy/status")
+async def deploy_status():
+    return {"status": "ready", "platform": "vercel"}
+
+# ========== VOICE COMMAND PARSING ==========
+from pydantic import BaseModel
+import re
+
+class VoiceCommandRequest(BaseModel):
+    text: str
+    current_file: str = None
+    selected_text: str = None
+
+@app.post("/api/voice/command")
+async def parse_voice_command(cmd: VoiceCommandRequest):
+    text = cmd.text.lower().strip()
+    selected = cmd.selected_text or ""
+    
+    # Refactor command
+    if re.search(r'\b(refactor|improve|rewrite|clean)\b', text):
+        return {"action": "refactor", "target": selected if selected else "current_function"}
+    
+    # Comment / uncomment
+    if re.search(r'\b(comment|uncomment)\b', text):
+        return {"action": "toggle_comment"}
+    
+    # Run tests
+    if re.search(r'\b(run|execute)\s+tests?\b', text):
+        return {"action": "run_tests"}
+    
+    # Deploy
+    if re.search(r'\b(deploy|publish|go live)\b', text):
+        return {"action": "deploy"}
+    
+    # Git commit
+    if re.search(r'\b(commit|save|checkpoint)\b', text):
+        return {"action": "git_commit"}
+    
+    # Branch switch
+    branch_match = re.search(r'\b(switch to|checkout)\s+(\w+)\b', text)
+    if branch_match:
+        branch = branch_match.group(2)
+        return {"action": "git_checkout", "branch": branch}
+    
+    # Open file
+    file_match = re.search(r'\b(open|show)\s+(\w+\.?\w*)\b', text)
+    if file_match:
+        filename = file_match.group(2)
+        return {"action": "open_file", "filename": filename}
+    
+    # Undo / Redo
+    if 'undo' in text:
+        return {"action": "undo"}
+    if 'redo' in text:
+        return {"action": "redo"}
+    
+    # Clear console
+    if re.search(r'\b(clear console|clear logs|clear)\b', text):
+        return {"action": "clear_console"}
+    
+    # Stop generation
+    if re.search(r'\b(stop|cancel)\s+generation\b', text):
+        return {"action": "stop_generation"}
+    
+    # Open settings
+    if re.search(r'\b(settings|preferences)\b', text):
+        return {"action": "open_settings"}
+    
+    # Help
+    if re.search(r'\b(help|commands|what can I say)\b', text):
+        return {"action": "show_help"}
+    
+    # Default – treat as generation prompt
+    return {"action": "generate", "prompt": cmd.text}
+
+# ========== UNIT TEST GENERATION ==========
+@app.post("/api/tests/generate")
+async def generate_tests(filepath: str = Body(..., embed=True)):
+    try:
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        file_full = os.path.join(workspace_dir, filepath)
+        if not os.path.exists(file_full):
+            raise HTTPException(404, "File not found")
+        with open(file_full, "r") as f:
+            code = f.read()
+        
+        # Use Ollama to generate tests
+        prompt = f"Generate unit tests for this code using appropriate framework (Jest for JS, pytest for Python):\n\n{code}\n\nOnly output the test code."
+        response = ollama.generate(model="codellama", prompt=prompt, system="You are a test expert.")
+        test_code = response['response']
+        
+        # Suggest filename
+        base = os.path.splitext(filepath)[0]
+        test_path = f"test_{base}.js" if filepath.endswith('.js') else f"test_{base}.py"
+        return {"test_code": test_code, "suggested_path": test_path}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/api/tests/run")
+async def run_tests():
+    # Placeholder – would need to run pytest/jest in workspace
+    return {"message": "Test runner not yet implemented. Install pytest or jest."}
+
+# ========== PREDICTIVE PRE‑FETCH ==========
+from pydantic import BaseModel
+
+class PredictRequest(BaseModel):
+    current_code: str
+    cursor_position: int
+    language: str = "javascript"
+
+@app.post("/api/predict")
+async def predict_next(req: PredictRequest):
+    try:
+        # Use Ollama to generate next lines based on context
+        prompt = f"""Complete the following code. Only output the next 1-3 lines that naturally follow, no extra text.
+        Language: {req.language}
+        Code:
+        {req.current_code}
+        
+        Next lines:"""
+        response = ollama.generate(model="codellama", prompt=prompt, system="You are a code completion assistant.")
+        suggestion = response['response'].strip()
+        # Limit suggestion to reasonable length
+        lines = suggestion.split('\n')[:3]
+        suggestion = '\n'.join(lines)
+        return {"suggestion": suggestion}
+    except Exception as e:
+        return {"suggestion": ""}
+
+# ========== AUTONOMOUS BUG FIXING ==========
+from pydantic import BaseModel
+
+class BugReport(BaseModel):
+    error_message: str
+    file_path: str
+    code_snippet: str = ""
+
+@app.post("/api/bug/fix")
+async def fix_bug(report: BugReport):
+    try:
+        # Read current file content if not provided
+        if not report.code_snippet and report.file_path:
+            file_full = os.path.join(os.path.dirname(__file__), "workspace", report.file_path)
+            if os.path.exists(file_full):
+                with open(file_full, "r") as f:
+                    report.code_snippet = f.read()
+        prompt = f"""Fix the following error in the code.
+Error: {report.error_message}
+Code:
+{report.code_snippet}
+Output only the corrected code, no explanations."""
+        response = ollama.generate(model="codellama", prompt=prompt, system="You are a debugging expert.")
+        fixed_code = response['response']
+        # Save fixed code back to file
+        if report.file_path:
+            file_full = os.path.join(os.path.dirname(__file__), "workspace", report.file_path)
+            with open(file_full, "w") as f:
+                f.write(fixed_code)
+        return {"fixed_code": fixed_code, "file_path": report.file_path}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# Endpoint to get preview errors (captured from frontend)
+@app.post("/api/bug/capture")
+async def capture_error(error: dict):
+    # Store error for analysis (optional)
+    print(f"Captured error: {error}")
+    return {"status": "logged"}
+
+# ========== UI MOCKUP TO CODE ==========
+import base64
+from fastapi import UploadFile, File
+
+@app.post("/api/mockup/to-code")
+async def mockup_to_code(file: UploadFile = File(...)):
+    try:
+        # Read image bytes
+        image_bytes = await file.read()
+        # Convert to base64 for prompt (optional, but Ollama can't see images directly)
+        # Instead, we'll rely on a textual description or use a multimodal model if available.
+        # For CPU, we'll ask user to provide a description alongside image, or we can use OCR?
+        # Simpler: use a generic prompt based on filename.
+        prompt = f"""Generate HTML/CSS code for a UI mockup described as: {file.filename}.
+        Create a complete, responsive webpage with modern styling. Output only HTML and CSS code, no explanations."""
+        response = ollama.generate(model="codellama", prompt=prompt, system="You are a frontend expert.")
+        code = response['response']
+        # Save as index.html in workspace
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        with open(os.path.join(workspace_dir, "mockup_output.html"), "w") as f:
+            f.write(code)
+        return {"html": code, "file": "mockup_output.html"}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ========== SELF‑HEALING CODE (Proactive) ==========
+class SelfHealingMonitor:
+    def __init__(self):
+        self.error_history = []
+    
+    async def heal_error(self, error_msg, file_path, code_snippet):
+        # Use AI to fix the error
+        prompt = f"""Fix this error in the code:
+Error: {error_msg}
+File: {file_path}
+Code:
+{code_snippet}
+Output only the corrected code, no explanations."""
+        response = ollama.generate(model="codellama", prompt=prompt)
+        fixed_code = response['response']
+        # Save fixed code
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        full_path = os.path.join(workspace_dir, file_path)
+        with open(full_path, "w") as f:
+            f.write(fixed_code)
+        return fixed_code
+
+healer = SelfHealingMonitor()
+
+@app.post("/api/heal")
+async def heal_endpoint(error: dict):
+    file_path = error.get("file", "index.html")
+    error_msg = error.get("error", "")
+    workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+    full_path = os.path.join(workspace_dir, file_path)
+    code = ""
+    if os.path.exists(full_path):
+        with open(full_path, "r") as f:
+            code = f.read()
+    fixed = await healer.heal_error(error_msg, file_path, code)
+    return {"fixed_code": fixed, "file": file_path}
+
+# Endpoint to get healing status
+@app.get("/api/heal/status")
+async def heal_status():
+    return {"status": "active", "mode": "proactive"}
+
+# ========== CI/CD INTEGRATION (GitHub Actions) ==========
+from pydantic import BaseModel
+
+class CICDConfig(BaseModel):
+    project_type: str = "web"  # web, node, python
+    test_command: str = "npm test"
+    build_command: str = "npm run build"
+    deploy_target: str = "vercel"  # or netlify, github_pages
+
+@app.post("/api/cicd/generate")
+async def generate_workflow(config: CICDConfig):
+    try:
+        if config.deploy_target == "vercel":
+            workflow = f"""
+name: Deploy to Vercel
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: {config.build_command}
+      - uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{{{ secrets.VERCEL_TOKEN }}}}
+          vercel-org-id: ${{{{ secrets.VERCEL_ORG_ID }}}}
+          vercel-project-id: ${{{{ secrets.VERCEL_PROJECT_ID }}}}
+          github-comment: false
+"""
+        elif config.deploy_target == "netlify":
+            workflow = f"""
+name: Deploy to Netlify
+on:
+  push:
+    branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: {config.build_command}
+      - uses: nwtgck/actions-netlify@v2
+        with:
+          publish-dir: './dist'
+          production-branch: main
+          github-token: ${{{{ secrets.GITHUB_TOKEN }}}}
+          deploy-message: "Deploy from GitHub Actions"
+"""
+        else:
+            workflow = f"""
+name: CI/CD Pipeline
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: {config.test_command}
+      - name: Run tests
+        run: {config.test_command}
+      - name: Build
+        run: {config.build_command}
+"""
+        # Save workflow file to workspace/.github/workflows/
+        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
+        workflows_dir = os.path.join(workspace_dir, ".github", "workflows")
+        os.makedirs(workflows_dir, exist_ok=True)
+        workflow_path = os.path.join(workflows_dir, "deploy.yml")
+        with open(workflow_path, "w") as f:
+            f.write(workflow)
+        return {"workflow": workflow, "saved_to": workflow_path}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ========== PLUGIN STORE ==========
+import importlib
+import sys
+import os
+from pydantic import BaseModel
+
+plugins = {}  # name -> module
+
+class PluginInfo(BaseModel):
+    name: str
+    version: str
+    description: str
+    author: str
+
+# Discover plugins in /plugins folder
+plugins_dir = os.path.join(os.path.dirname(__file__), "plugins")
+os.makedirs(plugins_dir, exist_ok=True)
+
+def load_plugins():
+    for filename in os.listdir(plugins_dir):
+        if filename.endswith(".py") and not filename.startswith("__"):
+            module_name = filename[:-3]
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, os.path.join(plugins_dir, filename))
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                if hasattr(module, "info") and hasattr(module, "activate"):
+                    plugins[module_name] = module
+                    print(f"✅ Loaded plugin: {module.info.name} v{module.info.version}")
+            except Exception as e:
+                print(f"⚠️ Failed to load plugin {filename}: {e}")
+
+@app.on_event("startup")
+async def startup_plugins():
+    load_plugins()
+
+@app.get("/api/plugins")
+async def list_plugins():
+    return {"plugins": [{"name": name, "info": mod.info.dict()} for name, mod in plugins.items()]}
+
+@app.post("/api/plugins/install")
+async def install_plugin(repo_url: str):
+    # Simplified: download from git or local path
+    # For demo, create a sample plugin
+    sample_plugin = """import asyncio
+from pydantic import BaseModel
+
+class PluginInfo(BaseModel):
+    name = "Sample Logger"
+    version = "1.0.0"
+    description = "Logs all generation events"
+    author = "VibeCoder"
+
+async def activate(websocket, data):
+    # This hook runs on every generation
+    print(f"Plugin: generation event {data}")
+    return data
+"""
+    plugin_path = os.path.join(plugins_dir, "sample_logger.py")
+    with open(plugin_path, "w") as f:
+        f.write(sample_plugin)
+    load_plugins()  # reload
+    return {"message": "Plugin installed (sample)", "plugin": "sample_logger"}
+
+@app.post("/api/plugins/uninstall")
+async def uninstall_plugin(name: str):
+    if name in plugins:
+        del plugins[name]
+        plugin_file = os.path.join(plugins_dir, f"{name}.py")
+        if os.path.exists(plugin_file):
+            os.remove(plugin_file)
+        return {"message": f"Plugin {name} uninstalled"}
+    return {"error": "Plugin not found"}

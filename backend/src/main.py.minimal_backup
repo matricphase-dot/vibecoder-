@@ -1,0 +1,64 @@
+﻿import asyncio
+import json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="VibeCoder Backend (Minimal)")
+
+# Allow all CORS for development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Simple mock generator
+class MockGenerator:
+    async def generate(self, prompt, plan, template):
+        yield {"type": "log", "message": f"Generating: {prompt} (plan: {plan}, template: {template})"}
+        yield {"type": "file", "path": "index.html", "content": "<!DOCTYPE html><html><body><h1>Hello from VibeCoder</h1></body></html>"}
+        yield {"type": "file", "path": "style.css", "content": "body { font-family: sans-serif; }"}
+        yield {"type": "file", "path": "script.js", "content": "console.log('VibeCoder ready');"}
+        yield {"type": "complete"}
+
+orchestrator = MockGenerator()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("✅ WebSocket client connected")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(f"📨 Received: {data}")
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "generate":
+                    prompt = msg.get("prompt", "")
+                    plan = msg.get("plan", "fast")
+                    template = msg.get("template", "vanilla")
+                    async for chunk in orchestrator.generate(prompt, plan, template):
+                        await websocket.send_text(json.dumps(chunk))
+                else:
+                    await websocket.send_text(json.dumps({"type": "log", "message": f"Unknown type: {msg.get('type')}"}))
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"type": "log", "message": "Invalid JSON"}))
+    except WebSocketDisconnect:
+        print("❌ WebSocket disconnected")
+    except Exception as e:
+        print(f"⚠️ WebSocket error: {e}")
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "backend": "minimal"}
+
+# Keep other endpoints if needed, but add placeholders
+@app.post("/api/deploy/vercel")
+async def deploy():
+    return {"message": "Deploy mock"}
+
+@app.get("/api/export/zip")
+async def export_zip():
+    return {"message": "Export mock"}

@@ -1,0 +1,549 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import Editor from '@monaco-editor/react';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { MonacoBinding } from 'y-monaco';
+import { Sparkles, FileCode, Eye, Play, Mic, GitBranch, Globe, Upload, Users, Settings, Bug, Wrench, RefreshCw } from 'lucide-react';
+
+// Hardcoded templates (fallback)
+const FALLBACK_TEMPLATES = [
+  { id: "vanilla", name: "Vanilla HTML/CSS/JS", description: "Plain HTML/CSS/JS starter", files: {
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>VibeCoder App</title><link rel='stylesheet' href='style.css'></head><body><div id='app'><h1>Hello VibeCoder</h1><p>Start editing!</p></div><script src='script.js'></script></body></html>",
+    "style.css": "body { font-family: sans-serif; margin: 2rem; } #app { text-align: center; }",
+    "script.js": "console.log('VibeCoder ready');"
+  }},
+  { id: "react", name: "React (with Vite)", description: "React 18 + Vite boilerplate", files: {
+    "package.json": "{\"name\":\"vibecoder-react\",\"version\":\"1.0.0\",\"type\":\"module\",\"scripts\":{\"dev\":\"vite\",\"build\":\"vite build\"},\"dependencies\":{\"react\":\"^18.2.0\",\"react-dom\":\"^18.2.0\"},\"devDependencies\":{\"@vitejs/plugin-react\":\"^4.0.0\",\"vite\":\"^4.0.0\"}}",
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>React App</title></head><body><div id='root'></div><script type='module' src='/src/main.jsx'></script></body></html>",
+    "src/main.jsx": "import React from 'react'; import ReactDOM from 'react-dom/client'; import App from './App'; ReactDOM.createRoot(document.getElementById('root')).render(<App />);",
+    "src/App.jsx": "import React, { useState } from 'react'; import './App.css'; function App() { const [count, setCount] = useState(0); return (<div><h1>VibeCoder + React</h1><button onClick={() => setCount(c => c+1)}>count: {count}</button></div>); } export default App;",
+    "src/App.css": ".App { text-align: center; margin-top: 2rem; }"
+  }},
+  { id: "vue", name: "Vue 3 (with Vite)", description: "Vue 3 + Vite starter", files: {
+    "package.json": "{\"name\":\"vibecoder-vue\",\"version\":\"1.0.0\",\"type\":\"module\",\"scripts\":{\"dev\":\"vite\",\"build\":\"vite build\"},\"dependencies\":{\"vue\":\"^3.3.4\"},\"devDependencies\":{\"@vitejs/plugin-vue\":\"^4.0.0\",\"vite\":\"^4.0.0\"}}",
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Vue App</title></head><body><div id='app'></div><script type='module' src='/src/main.js'></script></body></html>",
+    "src/main.js": "import { createApp } from 'vue'; import App from './App.vue'; createApp(App).mount('#app');",
+    "src/App.vue": "<template><div><h1>VibeCoder + Vue</h1><button @click='count++'>count: {{ count }}</button></div></template><script>export default { data() { return { count: 0 } } }</script><style>div { text-align: center; margin-top: 2rem; }</style>"
+  }},
+  { id: "svelte", name: "Svelte (with Vite)", description: "Svelte + Vite starter", files: {
+    "package.json": "{\"name\":\"vibecoder-svelte\",\"version\":\"1.0.0\",\"type\":\"module\",\"scripts\":{\"dev\":\"vite\",\"build\":\"vite build\"},\"dependencies\":{\"svelte\":\"^4.0.0\"},\"devDependencies\":{\"@sveltejs/vite-plugin-svelte\":\"^2.0.0\",\"vite\":\"^4.0.0\"}}",
+    "index.html": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Svelte App</title></head><body><div id='app'></div><script type='module' src='/src/main.js'></script></body></html>",
+    "src/main.js": "import App from './App.svelte'; const app = new App({ target: document.getElementById('app') }); export default app;",
+    "src/App.svelte": "<script> let count = 0; </script><main><h1>VibeCoder + Svelte</h1><button on:click={() => count++}>count: {count}</button></main><style>main { text-align: center; margin-top: 2rem; }</style>"
+  }}
+];
+
+function App() {
+  const [files, setFiles] = useState({});
+  const [currentFile, setCurrentFile] = useState('index.html');
+  const [logs, setLogs] = useState([]);
+  const [ws, setWs] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [plans, setPlans] = useState(null);
+  const [activeTab, setActiveTab] = useState('editor');
+  const [previewKey, setPreviewKey] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const [branches, setBranches] = useState([]);
+  const [currentBranch, setCurrentBranch] = useState('main');
+  const [deploying, setDeploying] = useState(false);
+  const [collaborators, setCollaborators] = useState(1);
+  const [templates, setTemplates] = useState(FALLBACK_TEMPLATES);
+  const [showSettings, setShowSettings] = useState(false);
+  const [llmProvider, setLlmProvider] = useState('ollama');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmModel, setLlmModel] = useState('tinyllama');
+  const [previewErrors, setPreviewErrors] = useState([]);
+  const [suggestedFix, setSuggestedFix] = useState(null);
+  const [showFixButton, setShowFixButton] = useState(false);
+  const iframeRef = useRef(null);
+  const editorRef = useRef(null);
+  const yDocRef = useRef(null);
+  const yProviderRef = useRef(null);
+  const yBindingRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const workspaceId = useRef(Math.floor(Math.random() * 10000));
+  const reconnectAttempts = useRef(0);
+
+  const addLog = (message, type = 'info') => {
+    setLogs(prev => [...prev, { message, type, timestamp: new Date().toLocaleTimeString() }]);
+  };
+
+  // Voice recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setPrompt(transcript);
+        addLog(`🎤 Voice: "${transcript}"`, 'success');
+        setIsListening(false);
+      };
+      recognitionRef.current.onerror = (event) => {
+        addLog(`🎤 Error: ${event.error}`, 'error');
+        setIsListening(false);
+      };
+      recognitionRef.current.onend = () => setIsListening(false);
+    } else {
+      addLog('Voice not supported', 'error');
+    }
+  }, []);
+
+  const startListening = async () => {
+    if (!recognitionRef.current) return;
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      recognitionRef.current.start();
+      setIsListening(true);
+      addLog('🎤 Listening...', 'info');
+    } catch (err) {
+      addLog(`🎤 Mic error: ${err.message}`, 'error');
+    }
+  };
+
+  // Error capture from iframe
+  useEffect(() => {
+    const handleIframeErrors = (event) => {
+      if (iframeRef.current && event.source === iframeRef.current.contentWindow) {
+        const errorMsg = event.data?.message || event.message || 'Unknown error';
+        setPreviewErrors(prev => [...prev, { message: errorMsg, timestamp: Date.now() }]);
+        addLog(`🐛 Error in preview: ${errorMsg.substring(0, 100)}`, 'error');
+        sendDebugRequest(errorMsg);
+      }
+    };
+    window.addEventListener('message', handleIframeErrors);
+    return () => window.removeEventListener('message', handleIframeErrors);
+  }, [files]);
+
+  const sendDebugRequest = async (errorMsg) => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/debug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, error: errorMsg, files })
+      });
+      const data = await res.json();
+      if (data.fix && data.fix.description) {
+        setSuggestedFix(data.fix);
+        setShowFixButton(true);
+        addLog(`💡 AI suggests: ${data.fix.description}`, 'success');
+      }
+    } catch(e) { console.error('Debug API error:', e); }
+  };
+
+  const applyFix = () => {
+    if (!suggestedFix || !suggestedFix.file) return;
+    if (suggestedFix.patch && files[suggestedFix.file]) {
+      setFiles(prev => ({
+        ...prev,
+        [suggestedFix.file]: suggestedFix.patch
+      }));
+      addLog(`✅ Applied fix to ${suggestedFix.file}`, 'success');
+      setShowFixButton(false);
+      setSuggestedFix(null);
+    } else {
+      addLog('Fix could not be applied automatically', 'error');
+    }
+  };
+
+  // Yjs collaboration (simplified)
+  const initYjs = (filePath, content) => {
+    if (yBindingRef.current) yBindingRef.current.destroy();
+    if (yProviderRef.current) yProviderRef.current.disconnect();
+    if (yDocRef.current) yDocRef.current.destroy();
+    const doc = new Y.Doc();
+    yDocRef.current = doc;
+    const yText = doc.getText('monaco');
+    if (content) yText.insert(0, content);
+    const provider = new WebsocketProvider('ws://127.0.0.1:1234', `ws-${workspaceId.current}-${filePath}`, doc);
+    yProviderRef.current = provider;
+    provider.on('status', event => {
+      if (event.status === 'connected') {
+        addLog(`🤝 Collab active (${provider.awareness.getStates().size} users)`, 'success');
+        setCollaborators(provider.awareness.getStates().size);
+      }
+    });
+    provider.awareness.on('change', () => setCollaborators(provider.awareness.getStates().size));
+    const bind = () => {
+      if (editorRef.current) {
+        const model = editorRef.current.getModel();
+        if (model) {
+          yBindingRef.current = new MonacoBinding(yText, model, new Set([editorRef.current]), provider.awareness);
+        } else setTimeout(bind, 100);
+      } else setTimeout(bind, 100);
+    };
+    bind();
+  };
+
+  useEffect(() => {
+    if (files[currentFile]) initYjs(currentFile, files[currentFile]);
+    return () => {
+      if (yBindingRef.current) yBindingRef.current.destroy();
+      if (yProviderRef.current) yProviderRef.current.disconnect();
+      if (yDocRef.current) yDocRef.current.destroy();
+    };
+  }, [currentFile, files]);
+
+  // Templates
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/templates');
+      if (res.ok) {
+        const data = await res.json();
+        const templateList = Object.entries(data).map(([id, info]) => ({ id, ...info, files: FALLBACK_TEMPLATES.find(t => t.id === id)?.files || {} }));
+        if (templateList.length) setTemplates(templateList);
+        addLog(`✅ Loaded ${templateList.length} templates`, 'success');
+      }
+    } catch (err) {
+      addLog('Using fallback templates', 'warning');
+    }
+  };
+
+  const applyTemplate = (templateId) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+    addLog(`Applying ${template.name} template...`, 'info');
+    setFiles(template.files);
+    addLog(`✅ Template applied: ${Object.keys(template.files).length} files`, 'success');
+  };
+
+  // WebSocket connection for generation
+  const connect = () => {
+    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/${workspaceId.current}`);
+    socket.onopen = () => {
+      setConnected(true);
+      reconnectAttempts.current = 0;
+      addLog('Connected to backend', 'success');
+      fetchBranches();
+    };
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleMessage(data);
+      } catch(e) { addLog('Invalid message', 'error'); }
+    };
+    socket.onclose = () => {
+      setConnected(false);
+      addLog('Disconnected from backend', 'error');
+      // Auto reconnect
+      setTimeout(() => {
+        if (reconnectAttempts.current < 10) {
+          reconnectAttempts.current++;
+          addLog(`Reconnecting (${reconnectAttempts.current}/10)...`, 'info');
+          connect();
+        } else {
+          addLog('Max reconnects reached. Click Reconnect button.', 'error');
+        }
+      }, 3000);
+    };
+    socket.onerror = (err) => {
+      addLog(`WebSocket error: ${err.message}`, 'error');
+    };
+    setWs(socket);
+  };
+
+  const manualReconnect = () => {
+    if (ws) ws.close();
+    reconnectAttempts.current = 0;
+    addLog('Manual reconnect...', 'info');
+    connect();
+  };
+
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/branches/${workspaceId.current}`);
+      const data = await res.json();
+      setBranches(data.branches);
+    } catch(e) {}
+  };
+
+  const switchBranch = async (branch) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/switch-branch/${workspaceId.current}?branch_name=${branch}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`Switched to '${branch}'`, 'success');
+        setCurrentBranch(branch);
+        setFiles(data.files);
+      } else addLog(`Switch failed: ${data.detail}`, 'error');
+    } catch(e) { addLog(`Error: ${e.message}`, 'error'); }
+  };
+
+  const handleCommit = async () => {
+    if (Object.keys(files).length === 0) {
+      addLog('No files to commit', 'error');
+      return;
+    }
+    try {
+      addLog('Committing...', 'info');
+      const res = await fetch('http://127.0.0.1:8000/api/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, message: prompt.slice(0, 50) || 'VibeCoder generation' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`✅ Committed ${data.files} files (${data.commit})`, 'success');
+        fetchBranches();
+      } else addLog(`Commit failed: ${data.detail}`, 'error');
+    } catch(e) { addLog(`Commit error: ${e.message}`, 'error'); }
+  };
+
+  const handleDeploy = async () => {
+    if (Object.keys(files).length === 0) {
+      addLog('No files to deploy', 'error');
+      return;
+    }
+    setDeploying(true);
+    addLog('Deploying to Vercel...', 'info');
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/deploy-vercel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, vercel_token: '' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`✅ Deployed: ${data.url}`, 'success');
+        window.open(data.url, '_blank');
+      } else addLog(`Deploy failed: ${data.detail}`, 'error');
+    } catch(e) { addLog(`Deploy error: ${e.message}`, 'error'); }
+    finally { setDeploying(false); }
+  };
+
+  const handleExport = async () => {
+    if (Object.keys(files).length === 0) {
+      addLog('No files to export', 'error');
+      return;
+    }
+    try {
+      addLog('Exporting ZIP...', 'info');
+      const res = await fetch(`http://127.0.0.1:8000/api/export/${workspaceId.current}`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vibecoder-${workspaceId.current}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addLog('✅ Exported', 'success');
+    } catch(e) { addLog(`Export error: ${e.message}`, 'error'); }
+  };
+
+  const saveLLMConfig = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/llm/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, provider: llmProvider, api_key: llmApiKey, model: llmModel })
+      });
+      if (res.ok) addLog(`LLM set to ${llmProvider} (${llmModel})`, 'success');
+      else addLog('Failed to set LLM', 'error');
+      setShowSettings(false);
+    } catch(e) { addLog(`Error: ${e.message}`, 'error'); }
+  };
+
+  useEffect(() => {
+    connect();
+    fetchTemplates();
+    return () => ws?.close();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'preview') setPreviewKey(prev => prev + 1);
+  }, [files, activeTab]);
+
+  const handleMessage = (data) => {
+    switch (data.type) {
+      case 'log': addLog(data.message, 'info'); break;
+      case 'plans': setPlans(data.plans); addLog(`Received ${data.plans.length} plans`, 'success'); break;
+      case 'file': setFiles(prev => ({ ...prev, [data.path]: data.content })); addLog(`File: ${data.path}`, 'success'); break;
+      case 'file_chunk': setFiles(prev => ({ ...prev, [data.path]: (prev[data.path] || '') + data.chunk })); break;
+      case 'done': addLog(data.message, 'success'); setGenerating(false); setPlans(null); break;
+      case 'error': addLog(`Error: ${data.message}`, 'error'); setGenerating(false); setPlans(null); break;
+      default: console.log(data);
+    }
+  };
+
+  const sendMessage = (type, payload = {}) => {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, ...payload }));
+    else addLog('Not connected', 'error');
+  };
+
+    const handleGenerate = async () => {
+    if (!prompt.trim()) { addLog('Enter a prompt', 'error'); return; }
+    if (!connected) { addLog('Not connected', 'error'); return; }
+    // Loop detection
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/detect-loop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: workspaceId.current, prompt })
+      });
+      const data = await res.json();
+      if (data.loop_detected) {
+        addLog(`⚠️ ${data.message}`, 'warning');
+        return;
+      }
+    } catch(e) { /* ignore */ }
+    setGenerating(true); setPlans(null); setFiles({});
+    addLog(`Generating: ${prompt}`, 'info');
+    sendMessage('generate', { prompt });
+  };
+
+  const selectPlan = (idx) => {
+    sendMessage('select_plan', { plan_index: idx });
+    addLog(`Plan ${idx+1} selected`, 'info');
+    setPlans(null);
+  };
+
+  const getPreviewHtml = () => {
+    const html = files['index.html'] || '<html><body><h1>No index.html</h1></body></html>';
+    const css = files['style.css'] || '';
+    const js = files['script.js'] || '';
+    let preview = html;
+    if (css && !html.includes('<style')) preview = preview.replace('</head>', `<style>${css}</style></head>`);
+    if (js && !html.includes('<script')) preview = preview.replace('</body>', `<script>${js}</script></body>`);
+    return preview;
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#111', color: '#eee' }}>
+      {/* Header */}
+      <div style={{ backgroundColor: '#1f1f1f', padding: '8px 16px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Sparkles size={20} color="#9c27b0" />
+          <h1 style={{ fontSize: '18px', margin: 0 }}>VibeCoder</h1>
+          <span style={{ fontSize: '12px', padding: '2px 6px', borderRadius: '4px', backgroundColor: connected ? '#2e7d32' : '#d32f2f' }}>
+            {connected ? 'Connected' : 'Disconnected'}
+          </span>
+          {collaborators > 1 && <span style={{ fontSize: '12px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#0284c7' }}><Users size={12} /> {collaborators} online</span>}
+          {showFixButton && (
+            <button onClick={applyFix} style={{ backgroundColor: '#f97316', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>
+              <Wrench size={12} /> Instant Fix
+            </button>
+          )}
+          <button onClick={manualReconnect} style={{ backgroundColor: '#555', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>
+            <RefreshCw size={12} /> Reconnect
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <select onChange={(e) => applyTemplate(e.target.value)} value="" style={{ backgroundColor: '#2c2c2c', border: 'none', padding: '4px 8px', borderRadius: '4px', color: 'white' }}>
+            <option value="">📁 Templates ({templates.length})</option>
+            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <button onClick={() => setActiveTab('editor')} style={{ backgroundColor: activeTab === 'editor' ? '#333' : 'transparent', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}><FileCode size={16} /> Editor</button>
+          <button onClick={() => setActiveTab('preview')} style={{ backgroundColor: activeTab === 'preview' ? '#333' : 'transparent', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}><Eye size={16} /> Preview</button>
+          <button onClick={handleCommit} disabled={Object.keys(files).length === 0} style={{ backgroundColor: '#2e7d32', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}><GitBranch size={16} /> Commit</button>
+          <button onClick={handleExport} disabled={Object.keys(files).length === 0} style={{ backgroundColor: '#f97316', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}><Upload size={16} /> ZIP</button>
+          <button onClick={handleDeploy} disabled={deploying || Object.keys(files).length === 0} style={{ backgroundColor: '#0284c7', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}><Globe size={16} /> {deploying ? 'Deploying...' : 'Deploy'}</button>
+          <button onClick={handleGenerate} disabled={generating} style={{ backgroundColor: '#7b1fa2', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}><Play size={16} /> {generating ? 'Generating...' : 'Generate'}</button>
+          <button onClick={() => setShowSettings(true)} style={{ backgroundColor: '#555', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}><Settings size={16} /></button>
+        </div>
+      </div>
+
+      {/* Branch bar */}
+      {branches.length > 0 && (
+        <div style={{ backgroundColor: '#2c2c2c', padding: '4px 12px', fontSize: '12px', display: 'flex', gap: '8px' }}>
+          <span>🌿 Branches:</span>
+          {branches.map(b => (
+            <button key={b} onClick={() => switchBranch(b)} style={{ backgroundColor: currentBranch === b ? '#7b1fa2' : 'transparent', border: 'none', padding: '2px 8px', borderRadius: '12px', cursor: 'pointer' }}>{b}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Main area */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ width: '200px', backgroundColor: '#1a1a1a', borderRight: '1px solid #333', overflow: 'auto' }}>
+          <div style={{ padding: '8px', borderBottom: '1px solid #333', fontWeight: 'bold' }}>📁 Files</div>
+          <div style={{ padding: '8px' }}>
+            {Object.keys(files).length === 0 ? <div style={{ color: '#666', textAlign: 'center', padding: '20px' }}>No files yet.<br />Generate or select a template!</div> :
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {Object.keys(files).map(file => (
+                  <li key={file} onClick={() => setCurrentFile(file)} style={{ padding: '4px 8px', cursor: 'pointer', backgroundColor: currentFile === file ? '#2c2c2c' : 'transparent', borderRadius: '4px', marginBottom: '2px' }}>📄 {file}</li>
+                ))}
+              </ul>
+            }
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {plans && (
+            <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #333', padding: '12px' }}>
+              <div style={{ fontSize: '14px', marginBottom: '8px' }}>Choose plan:</div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {plans.map((plan, idx) => (
+                  <button key={idx} onClick={() => selectPlan(idx)} style={{ flex: 1, backgroundColor: '#2c2c2c', border: 'none', padding: '12px', borderRadius: '6px', textAlign: 'left', cursor: 'pointer' }}>
+                    <div style={{ fontWeight: 'bold' }}>{plan.name}</div>
+                    <div style={{ fontSize: '12px', color: '#aaa' }}>{plan.description}</div>
+                    <div style={{ fontSize: '11px', color: '#9c27b0' }}>Est. {plan.estimated_time}h</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {activeTab === 'editor' ? (
+            <div style={{ flex: 1 }}>
+              <Editor height="100%" language={currentFile.endsWith('.html') ? 'html' : currentFile.endsWith('.css') ? 'css' : 'javascript'} theme="vs-dark" onMount={(editor) => editorRef.current = editor} options={{ minimap: { enabled: false }, fontSize: 14 }} />
+            </div>
+          ) : (
+            <div style={{ flex: 1, backgroundColor: 'white' }}>
+              <iframe
+                ref={iframeRef}
+                key={previewKey}
+                title="Preview"
+                srcDoc={getPreviewHtml()}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              />
+            </div>
+          )}
+        </div>
+        <div style={{ width: '280px', backgroundColor: '#1a1a1a', borderLeft: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '8px', borderBottom: '1px solid #333', fontWeight: 'bold' }}>📋 Logs</div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '8px', fontSize: '12px', fontFamily: 'monospace' }}>
+            {logs.map((log, i) => (
+              <div key={i} style={{ marginBottom: '4px', color: log.type === 'error' ? '#f44336' : log.type === 'success' ? '#4caf50' : '#ccc' }}>[{log.timestamp}] {log.message}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom bar */}
+      <div style={{ backgroundColor: '#1f1f1f', borderTop: '1px solid #333', padding: '8px', display: 'flex', gap: '8px' }}>
+        <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleGenerate()} placeholder="Describe app... or click mic" style={{ flex: 1, backgroundColor: '#2c2c2c', border: 'none', padding: '6px 12px', borderRadius: '4px', color: 'white' }} disabled={generating} />
+        <button onClick={startListening} disabled={isListening || generating} style={{ backgroundColor: isListening ? '#f44336' : '#555', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}><Mic size={16} /></button>
+        <button onClick={handleGenerate} disabled={generating} style={{ backgroundColor: '#7b1fa2', border: 'none', padding: '6px 16px', borderRadius: '4px', cursor: 'pointer' }}>{generating ? 'Generating...' : 'Generate'}</button>
+      </div>
+
+      {/* Settings modal */}
+      {showSettings && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1f1f1f', padding: '20px', borderRadius: '8px', width: '400px' }}>
+            <h3>LLM Settings</h3>
+            <select value={llmProvider} onChange={(e) => setLlmProvider(e.target.value)} style={{ width: '100%', marginBottom: '10px', padding: '8px' }}>
+              <option value="ollama">Ollama (local)</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="groq">Groq</option>
+            </select>
+            {llmProvider !== 'ollama' && <input type="password" placeholder="API Key" value={llmApiKey} onChange={(e) => setLlmApiKey(e.target.value)} style={{ width: '100%', marginBottom: '10px', padding: '8px' }} />}
+            <input placeholder="Model (e.g., gpt-3.5-turbo, llama2-70b)" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} style={{ width: '100%', marginBottom: '10px', padding: '8px' }} />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowSettings(false)} style={{ padding: '6px 12px' }}>Cancel</button>
+              <button onClick={saveLLMConfig} style={{ backgroundColor: '#7b1fa2', padding: '6px 12px' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
+

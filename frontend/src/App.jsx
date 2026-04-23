@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Analytics from './pages/Analytics';
 import Editor from '@monaco-editor/react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -8,17 +9,33 @@ import {
   Play, GitBranch, Upload, Download, Mic, MicOff,
   Settings, Zap, CheckCircle, AlertCircle, Loader2,
   X, Maximize2, Minimize2, Plus, ChevronRight, ChevronDown,
-  Copy, Check, Sparkles, Bug, TestTube, Rocket, Search
+  Copy, Check, Sparkles, Bug, TestTube, Rocket, Search, Shield
 } from 'lucide-react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
+import AdminPanel from './pages/AdminPanel';
+import SimpleModeUI from './pages/SimpleModeUI';
+import DebugPanel from './components/DebugPanel';
+import CompliancePanel from './components/CompliancePanel';
 
 const WS_URL = 'ws://localhost:8000/ws';
 
 function App() {
+  if (window.location.pathname === '/analytics') {
+    return <Analytics />;
+  }
+
+  // Route handling for Simple Mode
+  if (window.location.pathname === '/simple') {
+    return <SimpleModeUI />;
+  }
+  if (window.location.pathname === '/admin') {
+    return <AdminPanel />;
+  }
+
   // Core state
   const [connected, setConnected] = useState(false);
   const [files, setFiles] = useState({});
@@ -39,19 +56,16 @@ function App() {
   const [template, setTemplate] = useState('vanilla');
   const [isListening, setIsListening] = useState(false);
   const [suggestion, setSuggestion] = useState('');
-  
-  // Semantic search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  
-  // Refactoring state
   const [refactoring, setRefactoring] = useState(false);
   const [refactorTarget, setRefactorTarget] = useState('typescript');
-  
-  // Self‑healing toggle
   const [selfHealingEnabled, setSelfHealingEnabled] = useState(true);
-  
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [showCompliancePanel, setShowCompliancePanel] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
   // Refs
   const wsRef = useRef(null);
   const terminalRef = useRef(null);
@@ -65,39 +79,11 @@ function App() {
   const bindingRef = useRef(null);
   const terminalWsRef = useRef(null);
   const previewIframeRef = useRef(null);
-  
+
   const addLog = (message, type = 'info') => {
     setLogs(prev => [...prev, { message, type, timestamp: new Date() }]);
   };
-  
-  // ==== Self‑healing function (defined early) ====
-  const triggerHeal = async (errorMsg, filePath) => {
-    if (!selfHealingEnabled) return;
-    try {
-      const response = await fetch('http://localhost:8000/api/heal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: errorMsg, file: filePath })
-      });
-      const data = await response.json();
-      if (data.fixed_code) {
-        addLog(`🩺 Self‑healed ${filePath}`, 'success');
-        setFiles(prev => ({ ...prev, [filePath]: data.fixed_code }));
-        if (currentFile === filePath) setFileContent(data.fixed_code);
-      }
-    } catch (err) {
-      addLog(`Self‑healing failed: ${err}`, 'error');
-    }
-  };
-  
-  const capturePreviewError = async (errorMsg, filePath) => {
-    addLog(`🔴 Error detected: ${errorMsg}`, 'error');
-    if (selfHealingEnabled) {
-      await triggerHeal(errorMsg, filePath);
-    }
-  };
-  // ==== End self‑healing ====
-  
+
   // WebSocket (AI generation)
   useEffect(() => {
     const connect = () => {
@@ -119,7 +105,7 @@ function App() {
     connect();
     return () => wsRef.current?.close();
   }, []);
-  
+
   const handleWebSocketMessage = (data) => {
     switch (data.type) {
       case 'file':
@@ -142,7 +128,7 @@ function App() {
         break;
     }
   };
-  
+
   const handleGenerate = () => {
     if (!prompt.trim()) return;
     setGenerating(true);
@@ -154,14 +140,14 @@ function App() {
       template: template
     }));
   };
-  
+
   const handleSaveFile = () => {
     if (currentFile && fileContent !== files[currentFile]) {
       setFiles(prev => ({ ...prev, [currentFile]: fileContent }));
       addLog(`Saved: ${currentFile}`, 'success');
     }
   };
-  
+
   const handleDeploy = () => {
     addLog('Deploying to Vercel...', 'info');
     fetch('http://localhost:8000/api/deploy/vercel', {
@@ -171,12 +157,12 @@ function App() {
     }).then(() => addLog('Deployed successfully!', 'success'))
       .catch(err => addLog(`Deploy failed: ${err}`, 'error'));
   };
-  
+
   const handleExportZip = () => {
     window.open('http://localhost:8000/api/export/zip');
     addLog('Exporting ZIP...', 'info');
   };
-  
+
   // Predictive pre‑fetch
   const fetchPrediction = async (code, cursorPos, language) => {
     if (!code.trim() || code.length < 10) return;
@@ -192,7 +178,7 @@ function App() {
       setSuggestion('');
     }
   };
-  
+
   const handleEditorChange = (value) => {
     setFileContent(value);
     if (suggestionTimeout.current) clearTimeout(suggestionTimeout.current);
@@ -204,7 +190,7 @@ function App() {
       }
     }, 800);
   };
-  
+
   useHotkeys('tab', (e) => {
     if (suggestion) {
       e.preventDefault();
@@ -214,7 +200,7 @@ function App() {
       editorRef.current?.setValue(newContent);
     }
   });
-  
+
   // Voice commands
   const executeVoiceCommand = async (commandText) => {
     try {
@@ -284,7 +270,7 @@ function App() {
       addLog(`Voice error: ${err}`, 'error');
     }
   };
-  
+
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window)) {
       addLog('Voice not supported', 'error');
@@ -303,7 +289,7 @@ function App() {
     };
     recognition.start();
   };
-  
+
   // Semantic search
   const performSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -321,7 +307,7 @@ function App() {
     }
     setSearching(false);
   };
-  
+
   const openSearchResult = (filePath) => {
     if (files[filePath]) {
       setCurrentFile(filePath);
@@ -330,7 +316,7 @@ function App() {
       addLog(`File not found: ${filePath}`, 'error');
     }
   };
-  
+
   // Refactoring
   const performRefactor = async () => {
     if (!currentFile || !fileContent) {
@@ -368,42 +354,34 @@ function App() {
     }
     setRefactoring(false);
   };
-  
-  // Plugins
-  const [plugins, setPlugins] = useState([]);
-  const [loadingPlugins, setLoadingPlugins] = useState(false);
-  
-  const fetchPlugins = async () => {
-    setLoadingPlugins(true);
+
+  // Self‑healing
+  const triggerHeal = async (errorMsg, filePath) => {
+    if (!selfHealingEnabled) return;
     try {
-      const res = await fetch('http://localhost:8000/api/plugins');
-      const data = await res.json();
-      setPlugins(data.plugins || []);
-    } catch (err) {
-      addLog(`Failed to load plugins: ${err}`, 'error');
-    }
-    setLoadingPlugins(false);
-  };
-  
-  const installSamplePlugin = async () => {
-    try {
-      const res = await fetch('http://localhost:8000/api/plugins/install', {
+      const response = await fetch('http://localhost:8000/api/heal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: 'sample' })
+        body: JSON.stringify({ error: errorMsg, file: filePath })
       });
-      const data = await res.json();
-      addLog(`Plugin installed: ${data.plugin}`, 'success');
-      fetchPlugins();
+      const data = await response.json();
+      if (data.fixed_code) {
+        addLog(`🩺 Self‑healed ${filePath}`, 'success');
+        setFiles(prev => ({ ...prev, [filePath]: data.fixed_code }));
+        if (currentFile === filePath) setFileContent(data.fixed_code);
+      }
     } catch (err) {
-      addLog(`Install failed: ${err}`, 'error');
+      addLog(`Self‑healing failed: ${err}`, 'error');
     }
   };
-  
-  useEffect(() => {
-    fetchPlugins();
-  }, []);
-  
+
+  const capturePreviewError = async (errorMsg, filePath) => {
+    addLog(`🔴 Error detected: ${errorMsg}`, 'error');
+    if (selfHealingEnabled) {
+      await triggerHeal(errorMsg, filePath);
+    }
+  };
+
   // Yjs collaboration
   const initCollaboration = (editor) => {
     if (!editor || ydocRef.current) return;
@@ -418,7 +396,7 @@ function App() {
       addLog(`Collaboration ${event.status}`, event.status === 'connected' ? 'success' : 'info');
     });
   };
-  
+
   // Real terminal
   const initRealTerminal = () => {
     if (!terminalRef.current || termRef.current) return;
@@ -455,7 +433,7 @@ function App() {
       }
     });
   };
-  
+
   useEffect(() => {
     if (activeTab === 'terminal') {
       setTimeout(initRealTerminal, 100);
@@ -466,8 +444,8 @@ function App() {
       termRef.current = null;
     };
   }, [activeTab]);
-  
-  // Preview error listener (uses capturePreviewError defined earlier)
+
+  // Preview error listener
   useEffect(() => {
     const handleIframeMessage = (event) => {
       if (event.data && event.data.type === 'preview-error') {
@@ -477,7 +455,7 @@ function App() {
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
   }, []);
-  
+
   // Keyboard shortcuts
   useHotkeys('ctrl+s', () => handleSaveFile());
   useHotkeys('ctrl+p', () => setShowCommandPalette(true));
@@ -485,7 +463,7 @@ function App() {
   useHotkeys('ctrl+`', () => setActiveTab('terminal'));
   useHotkeys('ctrl+shift+p', () => setShowSettings(true));
   useHotkeys('ctrl+f', (e) => { e.preventDefault(); document.getElementById('search-input')?.focus(); });
-  
+
   // File tree component
   const FileTree = ({ files, onSelect, currentFile }) => {
     const [expanded, setExpanded] = useState({});
@@ -517,9 +495,8 @@ function App() {
     };
     return <div className="h-full overflow-auto">{renderTree(files)}</div>;
   };
-  
-  // Mockup upload handler (UI mockup to code)
-  const [uploading, setUploading] = useState(false);
+
+  // Mockup upload handler
   const handleMockupUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -543,7 +520,7 @@ function App() {
     }
     setUploading(false);
   };
-  
+
   // CI/CD generate
   const generateCICD = async () => {
     try {
@@ -558,7 +535,39 @@ function App() {
       addLog(`CI/CD failed: ${err}`, 'error');
     }
   };
-  
+
+  // Plugins state and functions
+  const [plugins, setPlugins] = useState([]);
+  const [loadingPlugins, setLoadingPlugins] = useState(false);
+  const fetchPlugins = async () => {
+    setLoadingPlugins(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/plugins');
+      const data = await res.json();
+      setPlugins(data.plugins || []);
+    } catch (err) {
+      addLog(`Failed to load plugins: ${err}`, 'error');
+    }
+    setLoadingPlugins(false);
+  };
+  const installSamplePlugin = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/plugins/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: 'sample' })
+      });
+      const data = await res.json();
+      addLog(`Plugin installed: ${data.plugin}`, 'success');
+      fetchPlugins();
+    } catch (err) {
+      addLog(`Install failed: ${err}`, 'error');
+    }
+  };
+  useEffect(() => {
+    fetchPlugins();
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-antigravity-bg text-antigravity-text">
       {/* Command Palette */}
@@ -577,7 +586,21 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
+      {/* Panels (Compliance, Debug) */}
+      {showCompliancePanel && (
+        <div className="fixed right-0 top-20 w-96 bg-antigravity-sidebar border-l border-antigravity-border p-4 z-50 shadow-xl">
+          <CompliancePanel existingCode={fileContent} onApplyFix={(code) => { setFileContent(code); setFiles(prev => ({...prev, [currentFile]: code})); }} />
+          <button onClick={() => setShowCompliancePanel(false)} className="absolute top-2 right-2 text-gray-400">✕</button>
+        </div>
+      )}
+      {showDebugPanel && (
+        <div className="fixed right-0 top-20 w-96 bg-antigravity-sidebar border-l border-antigravity-border p-4 z-50 shadow-xl">
+          <DebugPanel previewUrl="http://localhost:5173" onAutoFix={(error) => { setPrompt(`Fix: ${error}`); handleGenerate(); }} />
+          <button onClick={() => setShowDebugPanel(false)} className="absolute top-2 right-2 text-gray-400">✕</button>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="h-8 bg-antigravity-sidebar border-b border-antigravity-border flex items-center justify-between px-4 text-xs">
         <div className="flex items-center gap-2">
@@ -587,6 +610,10 @@ function App() {
           <span>{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
         <div className="flex gap-2 items-center">
+          <button onClick={() => window.location.href = '/simple'} className="hover:text-antigravity-accent">✨ Simple Mode</button>
+          <button onClick={() => window.location.href = '/admin'} className="hover:text-antigravity-accent"><Shield size={14} /></button>
+          <button onClick={() => setShowCompliancePanel(!showCompliancePanel)} className="hover:text-antigravity-accent">🔒 Compliance</button>
+          <button onClick={() => setShowDebugPanel(!showDebugPanel)} className="hover:text-antigravity-accent">🐞 Debug</button>
           <label className="cursor-pointer hover:text-antigravity-accent" title="Upload UI mockup (image)">
             <Upload size={14} />
             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleMockupUpload} />
@@ -608,9 +635,9 @@ function App() {
             <input type="checkbox" checked={selfHealingEnabled} onChange={e => setSelfHealingEnabled(e.target.checked)} />
             Auto‑heal
           </label>
-        </div>
+        <button onClick={() => window.location.href = "/analytics"} className="hover:text-antigravity-accent">📊 Analytics</button></div>
       </div>
-      
+
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
@@ -623,7 +650,6 @@ function App() {
             <div className="flex-1 overflow-auto">
               <FileTree files={files} onSelect={(path, content) => { setCurrentFile(path); setFileContent(content); }} currentFile={currentFile} />
             </div>
-            {/* Template selector */}
             <div className="p-2 border-t border-antigravity-border">
               <select value={template} onChange={e => setTemplate(e.target.value)} className="w-full bg-antigravity-tab text-antigravity-text p-1 rounded text-sm">
                 <option value="vanilla">Vanilla HTML/CSS/JS</option>
@@ -670,7 +696,7 @@ function App() {
             </div>
           </div>
         )}
-        
+
         {/* Editor/Preview/Terminal */}
         <div className="flex-1 flex flex-col">
           <div className="flex bg-antigravity-sidebar border-b border-antigravity-border">
@@ -696,14 +722,19 @@ function App() {
               />
             )}
             {activeTab === 'preview' && (
-              <iframe ref={previewIframeRef} srcDoc={previewHtml} className="w-full h-full border-0" title="Preview" />
+              <div className="relative w-full h-full">
+                <iframe ref={previewIframeRef} srcDoc={previewHtml} className="w-full h-full border-0" title="Preview" />
+                <div className="absolute top-2 right-2 z-10">
+                  <button onClick={() => setShowDebugPanel(!showDebugPanel)} className="bg-antigravity-tab px-2 py-1 rounded text-xs">🐞 Debug</button>
+                </div>
+              </div>
             )}
             {activeTab === 'terminal' && (
               <div ref={terminalRef} className="w-full h-full" />
             )}
           </div>
         </div>
-        
+
         {/* Logs Panel */}
         <div className="w-80 bg-antigravity-sidebar border-l border-antigravity-border flex flex-col">
           <div className="p-2 border-b border-antigravity-border font-semibold text-sm">Console</div>
@@ -716,7 +747,7 @@ function App() {
           </div>
         </div>
       </div>
-      
+
       {/* Bottom Bar */}
       <div className="border-t border-antigravity-border bg-antigravity-sidebar p-2">
         <div className="flex gap-2 items-center">
@@ -724,7 +755,7 @@ function App() {
           {showPlanSelector && (
             <div className="absolute bottom-12 bg-antigravity-tab rounded shadow-lg p-1">
               {['fast', 'scalable', 'clean'].map(p => (
-                <div key={p} className="px-2 py-1 hover:bg-antigravity-activeTab cursor-pointer" onClick={() => { setPlan(p); setShowPlanSelector(false); }}>{p}</div>
+                <div key={p} className="px-2 py-1 hover:bg-antigravity-activeTab cursor-pointer" onClick={() => { setPlan(p); setShowPlanSelector(false); }}>{p}<button onClick={() => window.location.href = "/analytics"} className="hover:text-antigravity-accent">📊 Analytics</button></div>
               ))}
             </div>
           )}

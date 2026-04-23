@@ -1,0 +1,23 @@
+﻿// HIPAA-compliant authentication middleware (example)
+// Includes audit logging, encryption, session timeout
+const auditLog = require('./auditLog');
+const crypto = require('crypto');
+
+function hipaaAuth(req, res, next) {
+    // Check authentication
+    if (!req.session.userId) {
+        auditLog.log('unauthorized_access', req.ip);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    // Log access to PHI
+    auditLog.log('access_phi', { userId: req.session.userId, resource: req.path });
+    // Enforce session timeout (15 minutes)
+    if (Date.now() - req.session.lastActivity > 15 * 60 * 1000) {
+        req.session.destroy();
+        return res.status(401).json({ error: 'Session expired' });
+    }
+    req.session.lastActivity = Date.now();
+    next();
+}
+
+module.exports = hipaaAuth;

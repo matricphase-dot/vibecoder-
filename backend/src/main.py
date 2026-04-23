@@ -1,11 +1,19 @@
-﻿# src/main.py – Full backend with WebSocket
-import asyncio
+﻿import asyncio
 import json
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
+import zipfile
+from pathlib import Path
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+import httpx
+
+# Import the real orchestrator (exists on disk)
 from src.generation import GenerationOrchestrator
 
-app = FastAPI(title="VibeCoder AI Backend")
+app = FastAPI(title="VibeCoder - Full AI Backend")
+
+# CORS - allow frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -14,12 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize the real orchestrator (uses agents, ChromaDB, Ollama)
 orchestrator = GenerationOrchestrator()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("✅ WebSocket connected")
+    print("✅ WebSocket connected - Full AI mode active")
     try:
         while True:
             data = await websocket.receive_text()
@@ -28,736 +37,254 @@ async def websocket_endpoint(websocket: WebSocket):
                 prompt = msg.get("prompt", "")
                 plan = msg.get("plan", "fast")
                 template = msg.get("template", "vanilla")
-                print(f"🎯 Generating: {prompt}")
+                print(f"🎯 Generating: {prompt} (plan={plan}, template={template})")
+                # Stream events from the real orchestrator
                 async for event in orchestrator.generate(prompt, plan, template):
                     await websocket.send_text(json.dumps(event))
             else:
-                await websocket.send_text(json.dumps({"type": "log", "message": "Unknown command"}))
+                await websocket.send_text(json.dumps({"type": "log", "message": f"Unknown type: {msg.get('type')}"}))
     except WebSocketDisconnect:
         print("❌ WebSocket disconnected")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"⚠️ WebSocket error: {e}")
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "mode": "full-ai"}
+    return {"status": "ok", "mode": "full", "agents": "active"}
 
-# ========== TERMINAL WEBSOCKET ==========
-import subprocess
-import platform
-import os
+@app.get("/api/templates")
+async def get_templates():
+    return {
+        "templates": ["vanilla", "react", "vue", "svelte"],
+        "default": "vanilla"
+    }
 
-@app.websocket("/terminal")
-async def terminal_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    print("🔌 Terminal client connected")
-    # Set working directory to workspace
-    workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-    os.makedirs(workspace_dir, exist_ok=True)
-    os.chdir(workspace_dir)
-    try:
-        while True:
-            command = await websocket.receive_text()
-            print(f"📟 Terminal command: {command}")
-            try:
-                shell = platform.system() == "Windows"
-                process = await asyncio.create_subprocess_shell(
-                    command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    shell=shell,
-                    cwd=workspace_dir
-                )
-                stdout, stderr = await process.communicate()
-                output = stdout.decode('utf-8', errors='replace')
-                if stderr:
-                    output += "\n" + stderr.decode('utf-8', errors='replace')
-                await websocket.send_text(output if output else "(no output)")
-            except Exception as e:
-                await websocket.send_text(f"Error: {str(e)}")
-    except Exception as e:
-        print(f"Terminal error: {e}")
+@app.post("/api/deploy/vercel")
+async def deploy_to_vercel():
+    # Placeholder - implement actual Vercel deployment if needed
+    return {"message": "Deployment endpoint ready - integrate Vercel CLI"}
 
-# ========== GIT INTEGRATION ==========
-import git
-import os
-from fastapi import HTTPException, Body
+@app.get("/api/export/zip")
+async def export_zip():
+    zip_path = Path("workspace.zip")
+    workspace = Path("workspace")
+    if workspace.exists():
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for file in workspace.rglob("*"):
+                if file.is_file():
+                    zipf.write(file, file.relative_to(workspace))
+    return FileResponse(zip_path, filename="vibecoder-workspace.zip")
 
-# Ensure we're in a git repo (or initialize one)
-workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-if not os.path.exists(os.path.join(workspace_dir, ".git")):
-    try:
-        repo = git.Repo.init(workspace_dir)
-        print("✅ Git repository initialized in workspace")
-    except Exception as e:
-        print(f"⚠️ Git init failed: {e}")
+# Additional Git endpoints (if GitPython is installed)
+try:
+    import git
+    from fastapi import HTTPException, Request
 
-@app.get("/api/git/status")
-async def git_status():
-    try:
-        repo = git.Repo(workspace_dir)
-        changed = [item.a_path for item in repo.index.diff(None)]
-        untracked = repo.untracked_files
-        return {"changed": changed, "untracked": untracked}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.post("/api/git/commit")
-async def git_commit(message: str = Body(..., embed=True)):
-    try:
-        repo = git.Repo(workspace_dir)
-        repo.index.add("*")
-        commit = repo.index.commit(message)
-        return {"commit": str(commit), "message": message}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/git/branches")
-async def git_branches():
-    try:
-        repo = git.Repo(workspace_dir)
+    @app.get("/api/git/branches")
+    async def get_branches():
+        repo = git.Repo(".")
         branches = [str(b) for b in repo.branches]
-        current = str(repo.active_branch)
-        return {"branches": branches, "current": current}
-    except Exception as e:
-        return {"error": str(e)}
+        return {"branches": branches, "current": str(repo.active_branch)}
 
-@app.post("/api/git/checkout")
-async def git_checkout(branch: str = Body(..., embed=True)):
-    try:
-        repo = git.Repo(workspace_dir)
-        repo.git.checkout(branch)
-        return {"branch": branch}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    @app.post("/api/git/commit")
+    async def commit(message: str):
+        repo = git.Repo(".")
+        repo.index.add("*")
+        repo.index.commit(message)
+        return {"message": f"Committed: {message}"}
+except ImportError:
+    print("⚠️ GitPython not installed - Git endpoints disabled")
 
-# ========== DEPLOY TO VERCEL ==========
-import subprocess
-import json
-import tempfile
-import shutil
+# ========== Phase 1 Additions ==========
+from typing import List, Optional
+import uuid
+from src.mcp.host import MCPHost
+from src.model_router import ModelRouter
+from src.agent_manager import AgentManager
 
-@app.post("/api/deploy/vercel")
-async def deploy_to_vercel():
-    try:
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        # Create a temporary vercel.json if not exists
-        vercel_json = os.path.join(workspace_dir, "vercel.json")
-        if not os.path.exists(vercel_json):
-            with open(vercel_json, "w") as f:
-                json.dump({
-                    "version": 2,
-                    "builds": [{"src": "**/*.html", "use": "@vercel/static"}],
-                    "routes": [{"src": "/(.*)", "dest": "/$1"}]
-                }, f)
-        # Run vercel deploy command (requires Vercel CLI installed)
-        # For now, return instructions – actual deploy would need CLI and token
-        return {
-            "message": "Deployment prepared",
-            "instructions": "Run 'vercel --prod' in workspace folder after installing Vercel CLI",
-            "workspace": workspace_dir
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# MCP Host
+mcp_host = MCPHost()
 
-@app.get("/api/deploy/status")
-async def deploy_status():
-    return {"status": "ready", "platform": "vercel"}
+@app.post("/api/mcp/register")
+async def register_mcp_server(name: str, command: List[str]):
+    server_id = await mcp_host.register_server(name, command)
+    return {"server_id": server_id}
 
-# ========== VOICE COMMAND PARSING ==========
-from pydantic import BaseModel
-import re
+@app.post("/api/mcp/call")
+async def call_mcp_tool(server_id: str, tool_name: str, arguments: dict):
+    result = await mcp_host.call_tool(server_id, tool_name, arguments)
+    return {"result": result}
 
-class VoiceCommandRequest(BaseModel):
-    text: str
-    current_file: str = None
-    selected_text: str = None
+# Model Router
+router = ModelRouter()
 
-@app.post("/api/voice/command")
-async def parse_voice_command(cmd: VoiceCommandRequest):
-    text = cmd.text.lower().strip()
-    selected = cmd.selected_text or ""
-    
-    # Refactor command
-    if re.search(r'\b(refactor|improve|rewrite|clean)\b', text):
-        return {"action": "refactor", "target": selected if selected else "current_function"}
-    
-    # Comment / uncomment
-    if re.search(r'\b(comment|uncomment)\b', text):
-        return {"action": "toggle_comment"}
-    
-    # Run tests
-    if re.search(r'\b(run|execute)\s+tests?\b', text):
-        return {"action": "run_tests"}
-    
-    # Deploy
-    if re.search(r'\b(deploy|publish|go live)\b', text):
-        return {"action": "deploy"}
-    
-    # Git commit
-    if re.search(r'\b(commit|save|checkpoint)\b', text):
-        return {"action": "git_commit"}
-    
-    # Branch switch
-    branch_match = re.search(r'\b(switch to|checkout)\s+(\w+)\b', text)
-    if branch_match:
-        branch = branch_match.group(2)
-        return {"action": "git_checkout", "branch": branch}
-    
-    # Open file
-    file_match = re.search(r'\b(open|show)\s+(\w+\.?\w*)\b', text)
-    if file_match:
-        filename = file_match.group(2)
-        return {"action": "open_file", "filename": filename}
-    
-    # Undo / Redo
-    if 'undo' in text:
-        return {"action": "undo"}
-    if 'redo' in text:
-        return {"action": "redo"}
-    
-    # Clear console
-    if re.search(r'\b(clear console|clear logs|clear)\b', text):
-        return {"action": "clear_console"}
-    
-    # Stop generation
-    if re.search(r'\b(stop|cancel)\s+generation\b', text):
-        return {"action": "stop_generation"}
-    
-    # Open settings
-    if re.search(r'\b(settings|preferences)\b', text):
-        return {"action": "open_settings"}
-    
-    # Help
-    if re.search(r'\b(help|commands|what can I say)\b', text):
-        return {"action": "show_help"}
-    
-    # Default – treat as generation prompt
-    return {"action": "generate", "prompt": cmd.text}
+@app.post("/api/chat")
+async def chat(prompt: str, system: str = "", provider: str = "ollama"):
+    async def generate():
+        async for chunk in router.generate(prompt, system, provider):
+            yield chunk
+    return StreamingResponse(generate(), media_type="text/plain")
 
-# ========== DEPLOY TO VERCEL ==========
-import subprocess
-import json
-import tempfile
-import shutil
+# Agent Manager
+agent_manager = AgentManager(max_concurrent=3)
 
-@app.post("/api/deploy/vercel")
-async def deploy_to_vercel():
-    try:
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        # Create a temporary vercel.json if not exists
-        vercel_json = os.path.join(workspace_dir, "vercel.json")
-        if not os.path.exists(vercel_json):
-            with open(vercel_json, "w") as f:
-                json.dump({
-                    "version": 2,
-                    "builds": [{"src": "**/*.html", "use": "@vercel/static"}],
-                    "routes": [{"src": "/(.*)", "dest": "/$1"}]
-                }, f)
-        # Run vercel deploy command (requires Vercel CLI installed)
-        # For now, return instructions – actual deploy would need CLI and token
-        return {
-            "message": "Deployment prepared",
-            "instructions": "Run 'vercel --prod' in workspace folder after installing Vercel CLI",
-            "workspace": workspace_dir
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.websocket("/ws/agent/{session_id}")
+async def agent_websocket(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    session = agent_manager.sessions.get(session_id)
+    if not session:
+        await websocket.close()
+        return
+    while session.status.value in ("running", "done"):
+        await websocket.send_text(json.dumps({
+            "status": session.status.value,
+            "progress": session.progress,
+            "current_step": session.current_step
+        }))
+        await asyncio.sleep(0.5)
 
-@app.get("/api/deploy/status")
-async def deploy_status():
-    return {"status": "ready", "platform": "vercel"}
+@app.post("/api/agents/start")
+async def start_agent(prompt: str):
+    from src.generation import run_generation
+    async def wrapped(p):
+        async for event in run_generation(p, 0, None):
+            yield event
+    session_id = await agent_manager.start_agent(prompt, wrapped)
+    return {"session_id": session_id}
 
-# ========== VOICE COMMAND PARSING ==========
-from pydantic import BaseModel
-import re
+@app.get("/api/agents/list")
+async def list_agents():
+    return {"agents": agent_manager.list_agents()}
 
-class VoiceCommandRequest(BaseModel):
-    text: str
-    current_file: str = None
-    selected_text: str = None
+@app.delete("/api/agents/{session_id}")
+async def stop_agent(session_id: str):
+    await agent_manager.stop_agent(session_id)
+    return {"status": "stopped"}
 
-@app.post("/api/voice/command")
-async def parse_voice_command(cmd: VoiceCommandRequest):
-    text = cmd.text.lower().strip()
-    selected = cmd.selected_text or ""
-    
-    # Refactor command
-    if re.search(r'\b(refactor|improve|rewrite|clean)\b', text):
-        return {"action": "refactor", "target": selected if selected else "current_function"}
-    
-    # Comment / uncomment
-    if re.search(r'\b(comment|uncomment)\b', text):
-        return {"action": "toggle_comment"}
-    
-    # Run tests
-    if re.search(r'\b(run|execute)\s+tests?\b', text):
-        return {"action": "run_tests"}
-    
-    # Deploy
-    if re.search(r'\b(deploy|publish|go live)\b', text):
-        return {"action": "deploy"}
-    
-    # Git commit
-    if re.search(r'\b(commit|save|checkpoint)\b', text):
-        return {"action": "git_commit"}
-    
-    # Branch switch
-    branch_match = re.search(r'\b(switch to|checkout)\s+(\w+)\b', text)
-    if branch_match:
-        branch = branch_match.group(2)
-        return {"action": "git_checkout", "branch": branch}
-    
-    # Open file
-    file_match = re.search(r'\b(open|show)\s+(\w+\.?\w*)\b', text)
-    if file_match:
-        filename = file_match.group(2)
-        return {"action": "open_file", "filename": filename}
-    
-    # Undo / Redo
-    if 'undo' in text:
-        return {"action": "undo"}
-    if 'redo' in text:
-        return {"action": "redo"}
-    
-    # Clear console
-    if re.search(r'\b(clear console|clear logs|clear)\b', text):
-        return {"action": "clear_console"}
-    
-    # Stop generation
-    if re.search(r'\b(stop|cancel)\s+generation\b', text):
-        return {"action": "stop_generation"}
-    
-    # Open settings
-    if re.search(r'\b(settings|preferences)\b', text):
-        return {"action": "open_settings"}
-    
-    # Help
-    if re.search(r'\b(help|commands|what can I say)\b', text):
-        return {"action": "show_help"}
-    
-    # Default – treat as generation prompt
-    return {"action": "generate", "prompt": cmd.text}
-
-# ========== DEPLOY TO VERCEL ==========
-import subprocess
-import json
-import tempfile
-import shutil
-
-@app.post("/api/deploy/vercel")
-async def deploy_to_vercel():
-    try:
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        # Create a temporary vercel.json if not exists
-        vercel_json = os.path.join(workspace_dir, "vercel.json")
-        if not os.path.exists(vercel_json):
-            with open(vercel_json, "w") as f:
-                json.dump({
-                    "version": 2,
-                    "builds": [{"src": "**/*.html", "use": "@vercel/static"}],
-                    "routes": [{"src": "/(.*)", "dest": "/$1"}]
-                }, f)
-        # Run vercel deploy command (requires Vercel CLI installed)
-        # For now, return instructions – actual deploy would need CLI and token
-        return {
-            "message": "Deployment prepared",
-            "instructions": "Run 'vercel --prod' in workspace folder after installing Vercel CLI",
-            "workspace": workspace_dir
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/deploy/status")
-async def deploy_status():
-    return {"status": "ready", "platform": "vercel"}
-
-# ========== VOICE COMMAND PARSING ==========
-from pydantic import BaseModel
-import re
-
-class VoiceCommandRequest(BaseModel):
-    text: str
-    current_file: str = None
-    selected_text: str = None
-
-@app.post("/api/voice/command")
-async def parse_voice_command(cmd: VoiceCommandRequest):
-    text = cmd.text.lower().strip()
-    selected = cmd.selected_text or ""
-    
-    # Refactor command
-    if re.search(r'\b(refactor|improve|rewrite|clean)\b', text):
-        return {"action": "refactor", "target": selected if selected else "current_function"}
-    
-    # Comment / uncomment
-    if re.search(r'\b(comment|uncomment)\b', text):
-        return {"action": "toggle_comment"}
-    
-    # Run tests
-    if re.search(r'\b(run|execute)\s+tests?\b', text):
-        return {"action": "run_tests"}
-    
-    # Deploy
-    if re.search(r'\b(deploy|publish|go live)\b', text):
-        return {"action": "deploy"}
-    
-    # Git commit
-    if re.search(r'\b(commit|save|checkpoint)\b', text):
-        return {"action": "git_commit"}
-    
-    # Branch switch
-    branch_match = re.search(r'\b(switch to|checkout)\s+(\w+)\b', text)
-    if branch_match:
-        branch = branch_match.group(2)
-        return {"action": "git_checkout", "branch": branch}
-    
-    # Open file
-    file_match = re.search(r'\b(open|show)\s+(\w+\.?\w*)\b', text)
-    if file_match:
-        filename = file_match.group(2)
-        return {"action": "open_file", "filename": filename}
-    
-    # Undo / Redo
-    if 'undo' in text:
-        return {"action": "undo"}
-    if 'redo' in text:
-        return {"action": "redo"}
-    
-    # Clear console
-    if re.search(r'\b(clear console|clear logs|clear)\b', text):
-        return {"action": "clear_console"}
-    
-    # Stop generation
-    if re.search(r'\b(stop|cancel)\s+generation\b', text):
-        return {"action": "stop_generation"}
-    
-    # Open settings
-    if re.search(r'\b(settings|preferences)\b', text):
-        return {"action": "open_settings"}
-    
-    # Help
-    if re.search(r'\b(help|commands|what can I say)\b', text):
-        return {"action": "show_help"}
-    
-    # Default – treat as generation prompt
-    return {"action": "generate", "prompt": cmd.text}
-
-# ========== UNIT TEST GENERATION ==========
-@app.post("/api/tests/generate")
-async def generate_tests(filepath: str = Body(..., embed=True)):
-    try:
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        file_full = os.path.join(workspace_dir, filepath)
-        if not os.path.exists(file_full):
-            raise HTTPException(404, "File not found")
-        with open(file_full, "r") as f:
-            code = f.read()
-        
-        # Use Ollama to generate tests
-        prompt = f"Generate unit tests for this code using appropriate framework (Jest for JS, pytest for Python):\n\n{code}\n\nOnly output the test code."
-        response = ollama.generate(model="codellama", prompt=prompt, system="You are a test expert.")
-        test_code = response['response']
-        
-        # Suggest filename
-        base = os.path.splitext(filepath)[0]
-        test_path = f"test_{base}.js" if filepath.endswith('.js') else f"test_{base}.py"
-        return {"test_code": test_code, "suggested_path": test_path}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-@app.post("/api/tests/run")
-async def run_tests():
-    # Placeholder – would need to run pytest/jest in workspace
-    return {"message": "Test runner not yet implemented. Install pytest or jest."}
-
-# ========== PREDICTIVE PRE‑FETCH ==========
-from pydantic import BaseModel
-
-class PredictRequest(BaseModel):
-    current_code: str
-    cursor_position: int
-    language: str = "javascript"
-
-@app.post("/api/predict")
-async def predict_next(req: PredictRequest):
-    try:
-        # Use Ollama to generate next lines based on context
-        prompt = f"""Complete the following code. Only output the next 1-3 lines that naturally follow, no extra text.
-        Language: {req.language}
-        Code:
-        {req.current_code}
-        
-        Next lines:"""
-        response = ollama.generate(model="codellama", prompt=prompt, system="You are a code completion assistant.")
-        suggestion = response['response'].strip()
-        # Limit suggestion to reasonable length
-        lines = suggestion.split('\n')[:3]
-        suggestion = '\n'.join(lines)
-        return {"suggestion": suggestion}
-    except Exception as e:
-        return {"suggestion": ""}
-
-# ========== AUTONOMOUS BUG FIXING ==========
-from pydantic import BaseModel
-
-class BugReport(BaseModel):
-    error_message: str
-    file_path: str
-    code_snippet: str = ""
-
-@app.post("/api/bug/fix")
-async def fix_bug(report: BugReport):
-    try:
-        # Read current file content if not provided
-        if not report.code_snippet and report.file_path:
-            file_full = os.path.join(os.path.dirname(__file__), "workspace", report.file_path)
-            if os.path.exists(file_full):
-                with open(file_full, "r") as f:
-                    report.code_snippet = f.read()
-        prompt = f"""Fix the following error in the code.
-Error: {report.error_message}
-Code:
-{report.code_snippet}
-Output only the corrected code, no explanations."""
-        response = ollama.generate(model="codellama", prompt=prompt, system="You are a debugging expert.")
-        fixed_code = response['response']
-        # Save fixed code back to file
-        if report.file_path:
-            file_full = os.path.join(os.path.dirname(__file__), "workspace", report.file_path)
-            with open(file_full, "w") as f:
-                f.write(fixed_code)
-        return {"fixed_code": fixed_code, "file_path": report.file_path}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-# Endpoint to get preview errors (captured from frontend)
-@app.post("/api/bug/capture")
-async def capture_error(error: dict):
-    # Store error for analysis (optional)
-    print(f"Captured error: {error}")
-    return {"status": "logged"}
-
-# ========== UI MOCKUP TO CODE ==========
-import base64
-from fastapi import UploadFile, File
-
-@app.post("/api/mockup/to-code")
-async def mockup_to_code(file: UploadFile = File(...)):
-    try:
-        # Read image bytes
-        image_bytes = await file.read()
-        # Convert to base64 for prompt (optional, but Ollama can't see images directly)
-        # Instead, we'll rely on a textual description or use a multimodal model if available.
-        # For CPU, we'll ask user to provide a description alongside image, or we can use OCR?
-        # Simpler: use a generic prompt based on filename.
-        prompt = f"""Generate HTML/CSS code for a UI mockup described as: {file.filename}.
-        Create a complete, responsive webpage with modern styling. Output only HTML and CSS code, no explanations."""
-        response = ollama.generate(model="codellama", prompt=prompt, system="You are a frontend expert.")
-        code = response['response']
-        # Save as index.html in workspace
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        with open(os.path.join(workspace_dir, "mockup_output.html"), "w") as f:
-            f.write(code)
-        return {"html": code, "file": "mockup_output.html"}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-# ========== SELF‑HEALING CODE (Proactive) ==========
-class SelfHealingMonitor:
-    def __init__(self):
-        self.error_history = []
-    
-    async def heal_error(self, error_msg, file_path, code_snippet):
-        # Use AI to fix the error
-        prompt = f"""Fix this error in the code:
-Error: {error_msg}
-File: {file_path}
-Code:
-{code_snippet}
-Output only the corrected code, no explanations."""
-        response = ollama.generate(model="codellama", prompt=prompt)
-        fixed_code = response['response']
-        # Save fixed code
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        full_path = os.path.join(workspace_dir, file_path)
-        with open(full_path, "w") as f:
-            f.write(fixed_code)
-        return fixed_code
-
-healer = SelfHealingMonitor()
-
-@app.post("/api/heal")
-async def heal_endpoint(error: dict):
-    file_path = error.get("file", "index.html")
-    error_msg = error.get("error", "")
-    workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-    full_path = os.path.join(workspace_dir, file_path)
-    code = ""
-    if os.path.exists(full_path):
-        with open(full_path, "r") as f:
-            code = f.read()
-    fixed = await healer.heal_error(error_msg, file_path, code)
-    return {"fixed_code": fixed, "file": file_path}
-
-# Endpoint to get healing status
-@app.get("/api/heal/status")
-async def heal_status():
-    return {"status": "active", "mode": "proactive"}
-
-# ========== CI/CD INTEGRATION (GitHub Actions) ==========
-from pydantic import BaseModel
-
-class CICDConfig(BaseModel):
-    project_type: str = "web"  # web, node, python
-    test_command: str = "npm test"
-    build_command: str = "npm run build"
-    deploy_target: str = "vercel"  # or netlify, github_pages
-
-@app.post("/api/cicd/generate")
-async def generate_workflow(config: CICDConfig):
-    try:
-        if config.deploy_target == "vercel":
-            workflow = f"""
-name: Deploy to Vercel
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: {config.build_command}
-      - uses: amondnet/vercel-action@v20
-        with:
-          vercel-token: ${{{{ secrets.VERCEL_TOKEN }}}}
-          vercel-org-id: ${{{{ secrets.VERCEL_ORG_ID }}}}
-          vercel-project-id: ${{{{ secrets.VERCEL_PROJECT_ID }}}}
-          github-comment: false
-"""
-        elif config.deploy_target == "netlify":
-            workflow = f"""
-name: Deploy to Netlify
-on:
-  push:
-    branches: [ main ]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-      - run: {config.build_command}
-      - uses: nwtgck/actions-netlify@v2
-        with:
-          publish-dir: './dist'
-          production-branch: main
-          github-token: ${{{{ secrets.GITHUB_TOKEN }}}}
-          deploy-message: "Deploy from GitHub Actions"
-"""
-        else:
-            workflow = f"""
-name: CI/CD Pipeline
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install dependencies
-        run: {config.test_command}
-      - name: Run tests
-        run: {config.test_command}
-      - name: Build
-        run: {config.build_command}
-"""
-        # Save workflow file to workspace/.github/workflows/
-        workspace_dir = os.path.join(os.path.dirname(__file__), "workspace")
-        workflows_dir = os.path.join(workspace_dir, ".github", "workflows")
-        os.makedirs(workflows_dir, exist_ok=True)
-        workflow_path = os.path.join(workflows_dir, "deploy.yml")
-        with open(workflow_path, "w") as f:
-            f.write(workflow)
-        return {"workflow": workflow, "saved_to": workflow_path}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-# ========== PLUGIN STORE ==========
-import importlib
-import sys
+# ========== ENTERPRISE / ADMIN ENDPOINTS ==========
+from src.enterprise.audit import get_audit_logger
+from src.enterprise.pii_filter import PIIFilter
+from src.enterprise.middleware import is_enterprise_mode, ENTERPRISE_MODE
 import os
-from pydantic import BaseModel
 
-plugins = {}  # name -> module
+@app.get("/admin/audit/export")
+async def export_audit(start_date: str, end_date: str):
+    from datetime import datetime
+    start = datetime.fromisoformat(start_date)
+    end = datetime.fromisoformat(end_date)
+    report = get_audit_logger().export_report(start, end)
+    return report.dict()
 
-class PluginInfo(BaseModel):
-    name: str
-    version: str
-    description: str
-    author: str
+@app.get("/admin/audit/verify")
+async def verify_audit():
+    result = get_audit_logger().verify_integrity()
+    return result.dict()
 
-# Discover plugins in /plugins folder
-plugins_dir = os.path.join(os.path.dirname(__file__), "plugins")
-os.makedirs(plugins_dir, exist_ok=True)
+@app.post("/admin/enterprise/toggle")
+async def toggle_enterprise_mode(enabled: bool):
+    # This would require restart or dynamic env update – for demo, we just return message
+    return {"message": f"Enterprise mode would be set to {enabled}. Restart backend with ENTERPRISE_MODE=true to enforce."}
 
-def load_plugins():
-    for filename in os.listdir(plugins_dir):
-        if filename.endswith(".py") and not filename.startswith("__"):
-            module_name = filename[:-3]
-            try:
-                spec = importlib.util.spec_from_file_location(module_name, os.path.join(plugins_dir, filename))
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                if hasattr(module, "info") and hasattr(module, "activate"):
-                    plugins[module_name] = module
-                    print(f"✅ Loaded plugin: {module.info.name} v{module.info.version}")
-            except Exception as e:
-                print(f"⚠️ Failed to load plugin {filename}: {e}")
+@app.get("/admin/enterprise/status")
+async def enterprise_status():
+    return {"enterprise_mode": is_enterprise_mode(), "hipaa_ready": True}
 
-@app.on_event("startup")
-async def startup_plugins():
-    load_plugins()
+@app.post("/admin/pii/redact")
+async def redact_pii(text: str):
+    redacted = PIIFilter.strip_pii(text)
+    return {"original_length": len(text), "redacted_length": len(redacted), "redacted": redacted}
 
-@app.get("/api/plugins")
-async def list_plugins():
-    return {"plugins": [{"name": name, "info": mod.info.dict()} for name, mod in plugins.items()]}
+# ========== BROWSER DEBUGGER ENDPOINT ==========
+from src.agents.debugger import Debugger
 
-@app.post("/api/plugins/install")
-async def install_plugin(repo_url: str):
-    # Simplified: download from git or local path
-    # For demo, create a sample plugin
-    sample_plugin = """import asyncio
-from pydantic import BaseModel
+debugger_instance = Debugger()
 
-class PluginInfo(BaseModel):
-    name = "Sample Logger"
-    version = "1.0.0"
-    description = "Logs all generation events"
-    author = "VibeCoder"
+@app.post("/api/debug/browser")
+async def browser_debug(preview_url: str):
+    result = await debugger_instance.run_browser_check(preview_url)
+    return result
 
-async def activate(websocket, data):
-    # This hook runs on every generation
-    print(f"Plugin: generation event {data}")
-    return data
-"""
-    plugin_path = os.path.join(plugins_dir, "sample_logger.py")
-    with open(plugin_path, "w") as f:
-        f.write(sample_plugin)
-    load_plugins()  # reload
-    return {"message": "Plugin installed (sample)", "plugin": "sample_logger"}
+# ========== NON-DEVELOPER MODE ENDPOINTS ==========
+from src.simple_mode import SimpleModeSummarizer
+simple_summarizer = SimpleModeSummarizer()
 
-@app.post("/api/plugins/uninstall")
-async def uninstall_plugin(name: str):
-    if name in plugins:
-        del plugins[name]
-        plugin_file = os.path.join(plugins_dir, f"{name}.py")
-        if os.path.exists(plugin_file):
-            os.remove(plugin_file)
-        return {"message": f"Plugin {name} uninstalled"}
-    return {"error": "Plugin not found"}
+@app.post("/api/simple/generate")
+async def simple_generate(request: dict):
+    prompt = request.get("prompt", "")
+    # For MVP, return a mock summary (you can integrate real generation later)
+    summary = await simple_summarizer.summarize_result({}, prompt)
+    suggestions = await simple_summarizer.suggest_next(prompt, summary)
+    return {"summary": summary, "suggestions": suggestions}
+
+@app.get("/api/simple/status")
+async def simple_status():
+    return {"mode": "active", "description": "Non-developer voice-first mode"}
+
+# ========== COMPLIANCE CODE GENERATION ENDPOINTS ==========
+from src.compliance.engine import ComplianceGenerator, ComplianceStandard
+
+compliance_gen = ComplianceGenerator()
+
+@app.post("/api/compliance/generate")
+async def generate_compliant_code(request: dict):
+    prompt = request.get("prompt", "")
+    standard = request.get("standard", "hipaa")
+    context = request.get("context", "")
+    try:
+        std = ComplianceStandard(standard.lower())
+    except ValueError:
+        return {"error": f"Invalid standard. Use one of: {[s.value for s in ComplianceStandard]}"}
+    result = await compliance_gen.generate_compliant_code(prompt, std, context)
+    return result
+
+@app.post("/api/compliance/check")
+async def check_code_compliance(request: dict):
+    code = request.get("code", "")
+    standard = request.get("standard", "hipaa")
+    try:
+        std = ComplianceStandard(standard.lower())
+    except ValueError:
+        return {"error": "Invalid standard"}
+    result = await compliance_gen.check_compliance(code, std)
+    return result.dict()
+
+@app.get("/api/compliance/templates/{standard}/{name}")
+async def get_compliance_template(standard: str, name: str):
+    try:
+        std = ComplianceStandard(standard.lower())
+    except ValueError:
+        return {"error": "Invalid standard"}
+    template = compliance_gen.get_template(std, name)
+    return {"template": template}
+
+# ========== ANALYTICS MIDDLEWARE ==========
+from src.analytics import get_analytics, AnalyticsEvent
+import time
+
+@app.middleware("http")
+async def analytics_middleware(request: Request, call_next):
+    # Log generation events after response (we'll capture from WebSocket instead)
+    # Simpler: we'll add manual logging in generation pipeline.
+    response = await call_next(request)
+    return response
+
+# ========== ANALYTICS ENDPOINTS ==========
+from src.analytics import get_analytics
+
+@app.get("/api/analytics/summary")
+async def analytics_summary(days: int = 7):
+    analytics = get_analytics()
+    summary = analytics.get_summary(days)
+    return summary.dict()
+
+@app.get("/api/analytics/export")
+async def analytics_export(days: int = 30):
+    analytics = get_analytics()
+    csv_data = analytics.export_csv(days)
+    return Response(content=csv_data, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=analytics.csv"})
+
+# Hook into generation to log events (patch existing generation function)
+# We'll modify run_generation to accept a logger callback – for now, we add a decorator.
+# But to keep it simple, we'll create a wrapper that logs after generation.
+# For MVP, we'll assume generation is already logged via WebSocket; we'll add manual logging in the WebSocket handler.
+

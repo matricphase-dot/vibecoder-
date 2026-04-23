@@ -1,0 +1,28 @@
+﻿// GDPR-compliant user data deletion endpoint
+const User = require('../models/User');
+const audit = require('../audit');
+
+async function deleteUserData(req, res) {
+    const userId = req.params.id;
+    // Verify user owns this data or is admin
+    if (req.user.id !== userId && !req.user.isAdmin) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    // Anonymize personal data (right to erasure)
+    await User.findByIdAndUpdate(userId, {
+        email: `deleted_${userId}@example.com`,
+        name: 'Deleted User',
+        personalData: null,
+        deletedAt: new Date()
+    });
+    // Log the deletion for audit (required for GDPR)
+    await audit.log({
+        action: 'data_deletion',
+        userId,
+        requestedBy: req.user.id,
+        timestamp: new Date(),
+        reason: req.body.reason || 'user request'
+    });
+    // Provide confirmation for data portability (optional)
+    res.json({ message: 'Your data has been anonymized per GDPR Article 17' });
+}

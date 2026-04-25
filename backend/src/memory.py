@@ -32,3 +32,11 @@ class VibeMemory:
     def clear_workspace(self, workspace_id="default"):
         self.client.delete_collection("workspace_memory")
         self.workspace = self.client.create_collection("workspace_memory")
+
+def get_memory():
+    """Return a dummy memory instance for now."""
+    global _memory
+    if '_memory' not in globals():
+        from src.memory import ChromaMemory
+        _memory = ChromaMemory()
+    return _memory

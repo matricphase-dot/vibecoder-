@@ -39,6 +39,15 @@ function App() {
   // Core state
   const [connected, setConnected] = useState(false);
   const [files, setFiles] = useState({});
+  const fetchWorkspaceFiles = async () => {
+    try {
+      const res = await fetch('/api/workspace/files');
+      const newFiles = await res.json();
+      setFiles(newFiles);
+    } catch (err) {
+      console.error('Failed to refresh file tree', err);
+    }
+  };
   const [currentFile, setCurrentFile] = useState(null);
   const [fileContent, setFileContent] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -107,7 +116,9 @@ function App() {
   }, []);
 
   const handleWebSocketMessage = (data) => {
-    switch (data.type) {
+    switch (data.type) {      case 'file-tree-refresh':
+        fetchWorkspaceFiles();
+        break;
       case 'file':
         setFiles(prev => ({ ...prev, [data.path]: data.content }));
         if (!currentFile) setCurrentFile(data.path);
@@ -779,3 +790,4 @@ function App() {
 }
 
 export default App;
+

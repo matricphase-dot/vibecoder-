@@ -361,3 +361,18 @@ app.include_router(cicd_router)
 # Register Mission routes
 from src.api.mission_routes import router as mission_router
 app.include_router(mission_router)
+
+@app.get("/api/workspace/files")
+async def list_workspace_files():
+    from pathlib import Path
+    workspace_dir = Path("./workspace")
+    files = {}
+    if workspace_dir.exists():
+        for filepath in workspace_dir.rglob("*"):
+            if filepath.is_file():
+                rel = str(filepath.relative_to(workspace_dir))
+                try:
+                    files[rel] = filepath.read_text(encoding="utf-8")
+                except:
+                    files[rel] = ""
+    return files

@@ -10,6 +10,7 @@ from src.agents.parallel_coder_agent import ParallelCoderAgent
 from src.agents.merge_agent import MergeAgent
 from src.ast.context_builder import ContextBuilder
 from src.retrieval.hybrid_rag import HybridRetriever
+from src.prompt_enhancer import enhance_prompt
 
 class GenerationOrchestrator:
     def __init__(self, model="codellama"):
@@ -33,7 +34,7 @@ class GenerationOrchestrator:
         yield {"type": "log", "message": "🔍 Retrieving relevant code context..."}
         chunks = self.retriever.retrieve(prompt, current_file=None, top_k=5)
         context = self.retriever.build_context_string(chunks)
-        augmented_prompt = f"{context}\n\n=== USER REQUEST ===\n{prompt}"
+        augmented_prompt = await enhance_prompt(augmented_prompt)
 
         # Step 1: Plan (20‑50 files)
         yield {"type": "log", "message": "📋 Creating file plan..."}
@@ -66,5 +67,8 @@ class GenerationOrchestrator:
             full_path.parent.mkdir(parents=True, exist_ok=True)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
+                await websocket.send_text(json.dumps({'type': 'file-tree-refresh'}))
 
         yield {"type": "complete"}
+
+

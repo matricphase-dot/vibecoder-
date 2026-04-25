@@ -11,7 +11,7 @@
         value: false
     plan: free
 
-  - type: static
+  - type: static_site
     name: vibecoder-frontend
     buildCommand: cd frontend && npm install && npm run build
     publishPath: frontend/dist

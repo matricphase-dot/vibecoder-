@@ -1,0 +1,12 @@
+﻿services:
+  - type: web
+    name: vibecoder-backend
+    runtime: python
+    buildCommand: pip install -r backend/requirements-cloud.txt
+    startCommand: uvicorn backend.src.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: USE_OLLAMA
+        value: false
+    plan: free

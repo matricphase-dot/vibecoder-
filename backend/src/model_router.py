@@ -18,7 +18,7 @@ class ModelRouter:
         }
         async with httpx.AsyncClient() as client:
             if stream:
-                async with client.stream("POST", "https://api.deepseek.com/v1/chat/completions", headers=headers, json=data) as resp:
+                async with client.stream("https://api.deepseek.com/v1/chat/completions", headers=headers, json=data) as resp:
                     async for line in resp.aiter_lines():
                         if line.startswith("data: "):
                             chunk = line[6:]

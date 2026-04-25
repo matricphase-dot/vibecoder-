@@ -1,0 +1,5 @@
+﻿// In App.jsx, add a button to open Verification Panel:
+// import VerificationPanel from './components/VerificationPanel';
+// const [showVerifPanel, setShowVerifPanel] = useState(false);
+// Add button: <button onClick={() => setShowVerifPanel(!showVerifPanel)}>🧮 Z3 Verify</button>
+// Then render panel: {showVerifPanel && <VerificationPanel fileContent={fileContent} />}

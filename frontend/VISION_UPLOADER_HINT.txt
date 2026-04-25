@@ -1,0 +1,6 @@
+﻿// In App.jsx, import VisionUploader and add a button to open it.
+// When onPromptGenerated is called, you can set the prompt state and call handleGenerate().
+// Example:
+// const [showVisionUploader, setShowVisionUploader] = useState(false);
+// <button onClick={() => setShowVisionUploader(!showVisionUploader)}>📷 Vision Input</button>
+// {showVisionUploader && <VisionUploader onPromptGenerated={(prompt) => { setPrompt(prompt); handleGenerate(); setShowVisionUploader(false); }} />}

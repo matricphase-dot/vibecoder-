@@ -1,0 +1,7 @@
+﻿// In your frontend component (e.g., App.jsx), add these buttons near each generated code block.
+// Example:
+// <div>
+//   <button onClick={() => sendFeedback(prompt, content, true)}>👍</button>
+//   <button onClick={() => sendFeedback(prompt, content, false)}>👎</button>
+// </div>
+// Implement sendFeedback to POST to /api/feedback/accept or /api/feedback/reject.

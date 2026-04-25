@@ -1,0 +1,23 @@
+﻿# Patch generation.py to auto-run tests and retry on failure (add this inside code_one)
+# In the `code_one` function, after generating content, add:
+#
+#   # Auto-generate tests (using a simple heuristic or separate agent)
+#   test_content = f"""
+# import pytest
+# from {entry.path.replace('/', '.').replace('.py', '')} import *
+# def test_basic():
+#     assert True  # TODO: generate proper tests
+# """
+#   # Run tests in sandbox
+#   sandbox = SandboxRunner()
+#   test_files = {f"tests/test_{entry.path}": test_content}
+#   result = await sandbox.run_tests({entry.path: content}, test_files)
+#   reward = RewardCalculator().calculate_reward(result)
+#   RewardCalculator().store_reward(prompt, content, reward, result)
+#   if reward < 0.5:
+#       # Retry generation with error context
+#       retry_prompt = f"Fix the following test failures: {result['logs']}\nOriginal code:\n{content}"
+#       response = ollama.generate(model=self.model, prompt=retry_prompt, system=system)
+#       content = response.get('response', '')
+# 
+# This requires importing SandboxRunner and RewardCalculator at the top.

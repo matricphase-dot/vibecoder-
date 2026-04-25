@@ -288,3 +288,76 @@ async def analytics_export(days: int = 30):
 # But to keep it simple, we'll create a wrapper that logs after generation.
 # For MVP, we'll assume generation is already logged via WebSocket; we'll add manual logging in the WebSocket handler.
 
+
+# Register GNN routes
+from src.api.graph_routes import router as graph_router
+app.include_router(graph_router)
+
+# Register retrieval routes
+from src.api.retrieval_routes import router as retrieval_router
+app.include_router(retrieval_router)
+
+# ========== LEARNING FEEDBACK ENDPOINTS ==========
+from src.learning.feedback_collector import FeedbackCollector
+
+_feedback_collector = FeedbackCollector()
+
+@app.post("/api/feedback/accept")
+async def accept_feedback(request: dict):
+    _feedback_collector.record(
+        prompt=request.get("prompt", ""),
+        completion=request.get("completion", ""),
+        accepted=True,
+        model=request.get("model", "codellama"),
+        project_id=request.get("project_id", "default")
+    )
+    return {"message": "Thank you for your feedback! Model will improve tonight."}
+
+@app.post("/api/feedback/reject")
+async def reject_feedback(request: dict):
+    _feedback_collector.record(
+        prompt=request.get("prompt", ""),
+        completion=request.get("completion", ""),
+        accepted=False,
+        model=request.get("model", "codellama"),
+        project_id=request.get("project_id", "default")
+    )
+    return {"message": "Feedback recorded"}
+
+# ========== CODE RL ENDPOINTS ==========
+from src.rl.rl_trainer import RLTrainer
+
+@app.post("/api/rl/train")
+async def train_rl():
+    trainer = RLTrainer()
+    trainer.train()
+    return {"message": "RL training started in background"}
+
+@app.get("/api/rl/rewards")
+async def get_rewards_summary():
+    import sqlite3
+    conn = sqlite3.connect("./workspace/.rl/rewards.db")
+    cur = conn.execute("SELECT COUNT(*), AVG(reward) FROM rewards")
+    count, avg_reward = cur.fetchone()
+    conn.close()
+    return {"total": count, "average_reward": avg_reward or 0}
+
+# Register security routes
+from src.api.security_routes import router as security_router
+app.include_router(security_router)
+
+# Register verification routes
+from src.api.verification_routes import router as verification_router
+app.include_router(verification_router)
+
+# Register vision routes
+from src.api.vision_routes import router as vision_router
+app.include_router(vision_router)
+
+# Register CI/CD routes
+from src.api.cicd_routes import router as cicd_router
+app.include_router(cicd_router)
+
+# Register Mission routes
+from src.api.mission_routes import router as mission_router
+app.include_router(mission_router)

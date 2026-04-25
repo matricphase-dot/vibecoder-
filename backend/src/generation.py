@@ -1,60 +1,70 @@
-﻿# src/generation.py – Multi‑agent with memory
+﻿# backend/src/generation.py - Full recursive planner + parallel coder + merge
 import asyncio
 import json
 import ollama
-from src.memory import VibeMemory
+import os
+from pathlib import Path
 from typing import AsyncGenerator, Dict, Any
-
-class Architect:
-    def __init__(self, model="codellama"):
-        self.model = model
-    async def analyze(self, prompt: str, similar_code=None) -> dict:
-        context = ""
-        if similar_code:
-            context = f"Similar past code:\n{similar_code}\n"
-        system = "You are a software architect. Output ONLY JSON: {\"summary\":\"...\",\"tech_stack\":[],\"files\":[]}"
-        response = ollama.generate(model=self.model, prompt=context + prompt, system=system)
-        return json.loads(response['response'])
-
-class Planner:
-    async def plan(self, architecture: dict, prompt: str) -> list:
-        return architecture.get("files", ["index.html", "style.css", "script.js"])
-
-class Coder:
-    def __init__(self, model="codellama"):
-        self.model = model
-    async def write_file(self, path: str, description: str) -> str:
-        lang_map = {'html':'html','css':'css','js':'javascript','py':'python'}
-        lang = lang_map.get(path.split('.')[-1], 'text')
-        system = f"Write complete {path} code. Output ONLY the code."
-        response = ollama.generate(model=self.model, prompt=f"Write {path} for: {description}", system=system)
-        return response['response']
+from src.agents.planner_agent import PlannerAgent
+from src.agents.parallel_coder_agent import ParallelCoderAgent
+from src.agents.merge_agent import MergeAgent
+from src.ast.context_builder import ContextBuilder
+from src.retrieval.hybrid_rag import HybridRetriever
 
 class GenerationOrchestrator:
-    def __init__(self):
-        self.architect = Architect()
-        self.planner = Planner()
-        self.coder = Coder()
-        self.memory = VibeMemory()
-    
-    async def generate(self, prompt: str, plan_type: str, template: str) -> AsyncGenerator[Dict[str, Any], None]:
-        similar = self.memory.search_similar(prompt, n_results=2)
-        if similar and any(similar):
-            yield {"type": "log", "message": "📚 Found similar past code – using memory"}
+    def __init__(self, model="codellama"):
+        self.model = model
+        self.planner = PlannerAgent(model)
+        self.coder = ParallelCoderAgent(model)
+        self.merger = MergeAgent(model)
+        self.context_builder = ContextBuilder()
+        self.retriever = HybridRetriever()
+
+    async def generate(self, prompt: str, plan_type: str, template: str, websocket=None) -> AsyncGenerator[Dict[str, Any], None]:
+        workspace_dir = Path("./workspace")
+        existing_files = {}
+        if workspace_dir.exists():
+            for filepath in workspace_dir.rglob("*"):
+                if filepath.is_file():
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        existing_files[str(filepath.relative_to(workspace_dir))] = f.read()
+
+        # Step 0: retrieve relevant context
+        yield {"type": "log", "message": "🔍 Retrieving relevant code context..."}
+        chunks = self.retriever.retrieve(prompt, current_file=None, top_k=5)
+        context = self.retriever.build_context_string(chunks)
+        augmented_prompt = f"{context}\n\n=== USER REQUEST ===\n{prompt}"
+
+        # Step 1: Plan (20‑50 files)
+        yield {"type": "log", "message": "📋 Creating file plan..."}
+        plan = await self.planner.generate_plan(augmented_prompt)
+        yield {"type": "log", "message": f"📝 Planned {len(plan.files)} files"}
+
+        # Step 2: Parallel coding (with real WebSocket if provided)
+        yield {"type": "log", "message": "⚡ Coding files in parallel..."}
+        # We need to call the coder's generate_all, which already streams files via websocket.
+        # The ParallelCoderAgent expects a WebSocket; if None, we simulate.
+        if websocket:
+            files = await self.coder.generate_all(plan, websocket)
         else:
-            yield {"type": "log", "message": "🧠 Architect analyzing requirements..."}
-        
-        arch = await self.architect.analyze(prompt, similar[0] if similar and similar[0] else None)
-        yield {"type": "log", "message": f"📐 Architecture: {arch.get('summary','')}"}
-        
-        files = await self.planner.plan(arch, prompt)
-        yield {"type": "log", "message": f"📝 Will create {len(files)} files"}
-        
-        for path in files:
-            yield {"type": "log", "message": f"✍️ Generating {path}..."}
-            content = await self.coder.write_file(path, arch.get("summary",""))
-            self.memory.store_code(prompt, path, content)
-            yield {"type": "file", "path": path, "content": content}
-            await asyncio.sleep(0.2)
-        
+            # Simulate: code each file one by one without streaming (for when websocket not passed)
+            files = {}
+            for entry in plan.files:
+                response = ollama.generate(model=self.model, prompt=entry.purpose, system=f"Write {entry.path}. Only code.")
+                content = response.get('response', '')
+                files[entry.path] = content
+                yield {"type": "file", "path": entry.path, "content": content}
+                await asyncio.sleep(0.2)
+
+        # Step 3: Merge & fix imports
+        yield {"type": "log", "message": "🔄 Validating and fixing imports..."}
+        files = await self.merger.merge_and_fix(files, plan.files)
+
+        # Save all files to workspace
+        for path, content in files.items():
+            full_path = workspace_dir / path
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
         yield {"type": "complete"}

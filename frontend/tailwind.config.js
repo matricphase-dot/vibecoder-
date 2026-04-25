@@ -4,18 +4,27 @@ export default {
   theme: {
     extend: {
       colors: {
-        antigravity: {
-          bg: '#0D1117',
-          sidebar: '#161B22',
-          tab: '#21262D',
-          activeTab: '#30363D',
-          border: '#30363D',
-          text: '#C9D1D9',
+        cursor: {
+          bg: '#0F0F12',
+          sidebar: '#15161A',
+          tab: '#1E1F24',
+          activeTab: '#2A2B30',
+          border: '#2A2B30',
+          text: '#E1E4E8',
           accent: '#58A6FF',
         }
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.2s ease-in-out',
+        'slide-in-right': 'slideInRight 0.2s ease-out',
+      },
+      keyframes: {
+        fadeIn: { from: { opacity: 0 }, to: { opacity: 1 } },
+        slideInRight: { from: { transform: 'translateX(100%)' }, to: { transform: 'translateX(0)' } },
       },
     },
   },

@@ -2,24 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar – Antigravity style */
+/* Custom scrollbar – Cursor style */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #161B22;
+  background: #1E1F24;
 }
 ::-webkit-scrollbar-thumb {
-  background: #30363D;
-  border-radius: 4px;
+  background: #3A3C42;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #58A6FF;
 }
-/* Ghost text suggestion indicator */
-.monaco-editor .ghost-text {
-  color: #6a737d;
-  font-style: italic;
-  opacity: 0.7;
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Command palette animation */
+.command-palette-enter {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.command-palette-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: all 0.1s ease-out;
+}
+.command-palette-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+.command-palette-exit-active {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 0.1s ease-in;
 }

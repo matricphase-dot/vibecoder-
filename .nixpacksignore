@@ -1,0 +1,7 @@
+﻿mobile/
+venv_vibecoder/
+node_modules/
+electron-app/
+workspace/
+chroma_data/
+*.log

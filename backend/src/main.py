@@ -117,3 +117,7 @@ async def export_zip():
             for file in files:
                 zipf.write(os.path.join(root, file), arcname=file)
     return FileResponse(zip_path, media_type="application/zip", filename="project.zip")
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "mode": "railway"}

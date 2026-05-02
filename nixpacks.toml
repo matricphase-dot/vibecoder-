@@ -1,0 +1,14 @@
+﻿[build]
+builder = "python"
+
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = ["pip install -r requirements-cloud.txt"]
+
+[phases.build]
+cmds = []
+
+[phases.start]
+cmds = ["uvicorn src.main:app --host 0.0.0.0 --port $PORT"]

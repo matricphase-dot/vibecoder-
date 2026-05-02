@@ -1,5 +1,6 @@
 ﻿[build]
 builder = "python"
+root = "backend"
 
 [phases.setup]
 nixPkgs = ["python311"]

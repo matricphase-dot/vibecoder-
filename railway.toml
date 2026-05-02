@@ -1,9 +1,10 @@
 ﻿[build]
   builder = "NIXPACKS"
-  buildCommand = "cd backend && pip install -r requirements-cloud.txt"
+  buildCommand = "pip install -r requirements-cloud.txt"
+  root = "backend"
 
 [deploy]
-  startCommand = "cd backend && uvicorn src.main:app --host 0.0.0.0 --port $PORT"
+  startCommand = "uvicorn src.main:app --host 0.0.0.0 --port $PORT"
   healthcheckPath = "/api/health"
   healthcheckTimeout = 30
   restartPolicyType = "ON_FAILURE"
@@ -12,5 +13,5 @@
 [environments.production.variables]
   PYTHONUNBUFFERED = "1"
   USE_OLLAMA = "false"
-  DEEPSEEK_API_KEY = ""   # will be set in dashboard
-  GROQ_API_KEY = ""       # will be set in dashboard
+  DEEPSEEK_API_KEY = ""
+  GROQ_API_KEY = ""

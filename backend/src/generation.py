@@ -1,74 +1,144 @@
-﻿# backend/src/generation.py - Full recursive planner + parallel coder + merge
+﻿# generation.py – Gemini primary, Groq fallback
 import asyncio
+import httpx
 import json
-import ollama
 import os
+import logging
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Any
-from src.agents.planner_agent import PlannerAgent
-from src.agents.parallel_coder_agent import ParallelCoderAgent
-from src.agents.merge_agent import MergeAgent
-from src.ast.context_builder import ContextBuilder
-from src.retrieval.hybrid_rag import HybridRetriever
-from src.prompt_enhancer import enhance_prompt
+
+logger = logging.getLogger("generation")
+
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_KEY = os.getenv("GROQ_API_KEY")
+WORKSPACE = Path(os.getenv("WORKSPACE_DIR", "workspace"))
+
+SYSTEM_PROMPT = """You are VibeCoder, expert AI engineer.
+Generate complete, working, production-ready code.
+
+RULES:
+1. Always output files in this EXACT format:
+   === FILE: filename.ext ===
+   [complete file content here]
+   === END FILE ===
+
+2. Generate ALL needed files (at least index.html, style.css, script.js).
+3. Write complete code – no placeholders.
+4. Make the code beautiful and modern.
+5. Add proper error handling.
+
+Generate the complete application now:"""
+
+async def call_gemini(prompt: str) -> AsyncGenerator[str, None]:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key={GEMINI_KEY}&alt=sse"
+    body = {
+        "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT}\n\nUser request: {prompt}"}], "role": "user"}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 8192}
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream("POST", url, json=body) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    chunk = line[6:]
+                    if chunk == "[DONE]": break
+                    try:
+                        d = json.loads(chunk)
+                        text = d.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        if text: yield text
+                    except: pass
+
+async def call_groq(prompt: str) -> AsyncGenerator[str, None]:
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
+    body = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+        "stream": True,
+        "temperature": 0.2,
+        "max_tokens": 8192
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream("POST", url, headers=headers, json=body) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    chunk = line[6:]
+                    if chunk == "[DONE]": break
+                    try:
+                        d = json.loads(chunk)
+                        text = d["choices"][0]["delta"].get("content", "")
+                        if text: yield text
+                    except: pass
+
+def parse_files(raw_text: str) -> Dict[str, str]:
+    files = {}
+    parts = raw_text.split("=== FILE:")
+    for part in parts[1:]:
+        try:
+            header, rest = part.split("===", 1)
+            filename = header.strip()
+            if "=== END FILE ===" in rest:
+                content = rest.split("=== END FILE ===")[0].strip()
+            else:
+                content = rest.strip()
+            if filename and content:
+                files[filename] = content
+        except: pass
+    return files
 
 class GenerationOrchestrator:
-    def __init__(self, model="codellama"):
-        self.model = model
-        self.planner = PlannerAgent(model)
-        self.coder = ParallelCoderAgent(model)
-        self.merger = MergeAgent(model)
-        self.context_builder = ContextBuilder()
-        self.retriever = HybridRetriever()
+    async def generate(self, prompt: str, plan_type: str = "standard", template: str = "react") -> AsyncGenerator[Dict[str, Any], None]:
+        logger.info(f"Starting generation: {prompt}")
+        WORKSPACE.mkdir(exist_ok=True)
 
-    async def generate(self, prompt: str, plan_type: str, template: str, websocket=None) -> AsyncGenerator[Dict[str, Any], None]:
-        workspace_dir = Path("./workspace")
-        existing_files = {}
-        if workspace_dir.exists():
-            for filepath in workspace_dir.rglob("*"):
-                if filepath.is_file():
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        existing_files[str(filepath.relative_to(workspace_dir))] = f.read()
+        # Agent status updates
+        agents = [
+            ("architect", "Analyzing your request..."),
+            ("planner", "Planning file structure..."),
+            ("coder", "Generating code..."),
+        ]
+        for agent, msg in agents:
+            yield {"type": "agent", "agent": agent, "message": msg}
+            await asyncio.sleep(0.1)
 
-        # Step 0: retrieve relevant context
-        yield {"type": "log", "message": "🔍 Retrieving relevant code context..."}
-        chunks = self.retriever.retrieve(prompt, current_file=None, top_k=5)
-        context = self.retriever.build_context_string(chunks)
-        augmented_prompt = await enhance_prompt(augmented_prompt)
+        full_text = ""
+        used_groq = False
 
-        # Step 1: Plan (20‑50 files)
-        yield {"type": "log", "message": "📋 Creating file plan..."}
-        plan = await self.planner.generate_plan(augmented_prompt)
-        yield {"type": "log", "message": f"📝 Planned {len(plan.files)} files"}
+        try:
+            if GEMINI_KEY:
+                logger.info("Using Gemini API")
+                yield {"type": "log", "message": "Using Gemini 2.0 Flash (free)"}
+                async for chunk in call_gemini(prompt):
+                    full_text += chunk
+                    yield {"type": "chunk", "text": chunk}
+            else:
+                raise ValueError("No Gemini key")
+        except Exception as e:
+            logger.warning(f"Gemini failed: {e}, falling back to Groq")
+            if GROQ_KEY:
+                logger.info("Using Groq API fallback")
+                yield {"type": "log", "message": "Rate limit reached – switching to Groq (free, ultra‑fast)"}
+                used_groq = True
+                full_text = ""
+                async for chunk in call_groq(prompt):
+                    full_text += chunk
+                    yield {"type": "chunk", "text": chunk}
+            else:
+                raise
 
-        # Step 2: Parallel coding (with real WebSocket if provided)
-        yield {"type": "log", "message": "⚡ Coding files in parallel..."}
-        # We need to call the coder's generate_all, which already streams files via websocket.
-        # The ParallelCoderAgent expects a WebSocket; if None, we simulate.
-        if websocket:
-            files = await self.coder.generate_all(plan, websocket)
-        else:
-            # Simulate: code each file one by one without streaming (for when websocket not passed)
-            files = {}
-            for entry in plan.files:
-                response = ollama.generate(model=self.model, prompt=entry.purpose, system=f"Write {entry.path}. Only code.")
-                content = response.get('response', '')
-                files[entry.path] = content
-                yield {"type": "file", "path": entry.path, "content": content}
-                await asyncio.sleep(0.2)
+        files = parse_files(full_text)
+        yield {"type": "agent", "agent": "reviewer", "message": "Reviewing output..."}
 
-        # Step 3: Merge & fix imports
-        yield {"type": "log", "message": "🔄 Validating and fixing imports..."}
-        files = await self.merger.merge_and_fix(files, plan.files)
+        written = []
+        for filename, content in files.items():
+            filepath = WORKSPACE / filename
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content, encoding="utf-8")
+            written.append(filename)
+            yield {"type": "file", "path": filename, "content": content}
+            logger.info(f"Wrote: {filename}")
 
-        # Save all files to workspace
-        for path, content in files.items():
-            full_path = workspace_dir / path
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write(content)
-                await websocket.send_text(json.dumps({'type': 'file-tree-refresh'}))
-
-        yield {"type": "complete"}
-
-
+        yield {"type": "agent", "agent": "debugger", "message": "Done!"}
+        yield {"type": "complete", "files": written}
+        logger.info(f"Generation complete. Files: {written}")

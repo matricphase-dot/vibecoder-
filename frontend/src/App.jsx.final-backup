@@ -1,0 +1,138 @@
+﻿
+// Simple Monaco editor placeholder (you can replace with your actual Monaco later)
+const Editor = ({ value, onChange }) => (
+  <textarea
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    style={{ width: '100%', height: '100%', background: '#1e1e1e', color: '#d4d4d4', border: 'none', fontFamily: 'monospace', padding: '10px' }}
+  />
+);
+
+function App() {
+  const [prompt, setPrompt] = useState('');
+  const [files, setFiles] = useState({});
+  const [currentFile, setCurrentFile] = useState(null);
+  const [editorContent, setEditorContent] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [ws, setWs] = useState(null);
+  
+  const [currentProject, setCurrentProject] = useState(null);
+
+  // WebSocket connection for generation
+  useEffect(() => {
+    const socket = new WebSocket(wsUrl('/ws'));
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'file') {
+        setFiles(prev => ({ ...prev, [data.path]: data.content }));
+        if (!currentFile) setCurrentFile(data.path);
+      } else if (data.type === 'complete') {
+        setGenerating(false);
+      } else if (data.type === 'error') {
+        console.error(data.message);
+        setGenerating(false);
+      }
+    };
+    setWs(socket);
+    return () => socket.close();
+  }, []);
+
+  const handleGenerate = () => {
+    if (!prompt.trim() || !ws) return;
+    setGenerating(true);
+    ws.send(JSON.stringify({ type: 'generate', prompt }));
+  };
+
+  const handleFileOpen = (path, content) => {
+    setCurrentFile(path);
+    setEditorContent(content);
+  };
+
+  const saveFile = async () => {
+    if (!currentFile) return;
+    await fetch(apiUrl('/system/write'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: currentFile, content: editorContent })
+    });
+    setFiles(prev => ({ ...prev, [currentFile]: editorContent }));
+  };
+
+  const currentContent = currentFile ? (files[currentFile] || editorContent) : '';
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: '#0a0a0a', color: '#e5e5e5' }}>
+      {/* Top bar */}
+      <div style={{ display: 'flex', gap: '8px', padding: '10px', borderBottom: '1px solid #333', alignItems: 'center' }}>
+        <input
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe what you want to build..."
+          style={{ flex: 1, background: '#1e1e1e', border: '1px solid #333', padding: '8px', borderRadius: '6px', color: 'white' }}
+        />
+        <button onClick={handleGenerate} disabled={generating} style={{ background: '#1D4ED8', border: 'none', padding: '8px 16px', borderRadius: '6px', color: 'white', cursor: 'pointer' }}>
+          {generating ? 'Generating...' : 'Generate'}
+        </button>
+        <button onClick={() => setShowFileBrowser(true)} style={{ background: '#2d2d2d', border: 'none', padding: '8px 12px', borderRadius: '6px', color: 'white', cursor: 'pointer' }}>
+          📁 System Files
+        </button>
+      </div>
+
+      {/* Main content: file tree + editor + preview */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* File tree */}
+        <div style={{ width: '250px', borderRight: '1px solid #333', overflowY: 'auto', padding: '8px' }}>
+          <strong>Files</strong>
+          <ul style={{ listStyle: 'none', padding: 0, marginTop: '8px' }}>
+            {Object.keys(files).map(file => (
+              <li key={file} onClick={() => setCurrentFile(file)} style={{ cursor: 'pointer', padding: '4px', background: currentFile === file ? '#1e1e1e' : 'transparent', borderRadius: '4px' }}>
+                📄 {file}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Editor */}
+        <div style={{ flex: 2, display: 'flex', flexDirection: 'column', borderRight: '1px solid #333' }}>
+          <div style={{ padding: '8px', background: '#1e1e1e', borderBottom: '1px solid #333' }}>
+            {currentFile || 'No file selected'}
+          </div>
+          <Editor value={currentContent} onChange={setEditorContent} />
+          {currentFile && (
+            <button onClick={saveFile} style={{ margin: '8px', background: '#2d2d2d', border: 'none', padding: '4px 8px', borderRadius: '4px', color: 'white', cursor: 'pointer', alignSelf: 'flex-end' }}>
+              Save
+            </button>
+          )}
+        </div>
+
+        {/* Preview iframe */}
+        <div style={{ flex: 2 }}>
+          <iframe
+            title="preview"
+            srcDoc={files['index.html'] || '<h1>Preview will appear here</h1>'}
+            style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+            sandbox="allow-same-origin allow-scripts"
+          />
+        </div>
+      </div>
+
+      {/* FileBrowser Modal */}
+      {showFileBrowser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '80%', height: '80%', background: '#0C0B10', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', background: '#1E293B', display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'white' }}>System File Browser</span>
+              <button onClick={() => setShowFileBrowser(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+            <FileBrowser onFileOpen={handleFileOpen} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
+
+
